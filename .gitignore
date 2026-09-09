@@ -1,0 +1,15 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# IDEs
+.vscode/
+.idea/
+
+# Sistema
+.DS_Store
+Thumbs.db
+
+# Config local (gerado em tempo de execução, não deve ir pro repo)
+config.json

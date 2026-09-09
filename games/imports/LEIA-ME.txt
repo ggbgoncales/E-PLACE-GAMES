@@ -1,0 +1,2 @@
+Coloque aqui os .zip dos jogos. Ex: game6.zip -> vira games/game6/ sozinho.
+O zip precisa ter um main.py na raiz.
