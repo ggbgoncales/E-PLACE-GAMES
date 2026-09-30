@@ -13,3 +13,4 @@ Thumbs.db
 
 # Config local (gerado em tempo de execução, não deve ir pro repo)
 config.json
+data/*.json
