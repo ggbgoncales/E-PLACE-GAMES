@@ -18,13 +18,15 @@ import subprocess
 
 import pygame
 
-from utils.zip_extractor import extrair_zips
+from src.utils.zip_extractor import extrair_zips
+from src.jogador import GestorJogador
 
 # ---------------------------------------------------------------------------
 # Caminhos / Constantes
 # ---------------------------------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-GAMES_DIR = os.path.join(BASE_DIR, "games")
+SRC_DIR = os.path.join(BASE_DIR, "src")
+GAMES_DIR = os.path.join(SRC_DIR, "games")
 COVERS_DIR = os.path.join(BASE_DIR, "assets", "covers")
 UI_DIR = os.path.join(BASE_DIR, "assets", "ui")
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
@@ -103,6 +105,8 @@ class Eplace:
         pygame.init()
         pygame.display.set_caption("Eplace - Launcher")
         self.cfg = carregar_config()
+
+        self.gestor = GestorJogador(os.path.join(BASE_DIR, "data"))
 
         flags = pygame.FULLSCREEN if self.cfg.get("tela_cheia") else 0
         self.tela = pygame.display.set_mode((LARGURA, ALTURA), flags)
@@ -281,7 +285,8 @@ class Eplace:
                 self.cfg["tela_cheia"] = not self.cfg["tela_cheia"]
                 self._aplicar_tela()
             elif alvo == "volume":
-                self.cfg["volume"] = max(0, min(100, self.cfg["volume"] + direcao * 5))
+                self.cfg["volume"] = max(
+                    0, min(100, self.cfg["volume"] + direcao * 5))
         elif e.key in (pygame.K_RETURN, pygame.K_SPACE):
             if opcoes[self.config_idx] == "voltar":
                 salvar_config(self.cfg)
@@ -300,7 +305,8 @@ class Eplace:
             return
         jogo = self.jogos[self.jogo_idx]
         try:
-            subprocess.Popen([sys.executable, jogo["main"]], cwd=jogo["caminho"])
+            subprocess.Popen([sys.executable, jogo["main"]],
+                             cwd=jogo["caminho"])
         except Exception as ex:
             print("Erro ao iniciar o jogo:", ex)
 
@@ -329,7 +335,8 @@ class Eplace:
     def _texto_sombra(self, texto, fonte, cor, centro):
         """Desenha texto com sombra pra ficar legivel sobre a arte."""
         sombra = fonte.render(texto, True, PRETO)
-        self.tela.blit(sombra, sombra.get_rect(center=(centro[0] + 2, centro[1] + 2)))
+        self.tela.blit(sombra, sombra.get_rect(
+            center=(centro[0] + 2, centro[1] + 2)))
         img = fonte.render(texto, True, cor)
         rect = img.get_rect(center=centro)
         self.tela.blit(img, rect)
@@ -410,7 +417,8 @@ class Eplace:
 
         if not self.jogos:
             aviso = self.f_menu.render("Nenhum jogo em /games", True, CINZA)
-            self.tela.blit(aviso, aviso.get_rect(center=(LARGURA // 2, ALTURA // 2)))
+            self.tela.blit(aviso, aviso.get_rect(
+                center=(LARGURA // 2, ALTURA // 2)))
             self._rodape("ESC voltar")
             return
 
@@ -444,7 +452,8 @@ class Eplace:
                                  (rect.right + 12, rect.centery - 14, 5, 28),
                                  border_radius=2)
 
-        self._rodape("SETAS cima/baixo   |   ENTER jogar   |   BACKSPACE / ESC voltar (animado)")
+        self._rodape(
+            "SETAS cima/baixo   |   ENTER jogar   |   BACKSPACE / ESC voltar (animado)")
 
     def _draw_config(self):
         self._fundo(None)
@@ -452,7 +461,8 @@ class Eplace:
         self.tela.blit(titulo, titulo.get_rect(center=(LARGURA // 2, 120)))
 
         opcoes = [
-            ("Tela cheia", "LIGADO" if self.cfg["tela_cheia"] else "DESLIGADO"),
+            ("Tela cheia",
+             "LIGADO" if self.cfg["tela_cheia"] else "DESLIGADO"),
             ("Volume", f"{self.cfg['volume']}%"),
             ("Voltar", ""),
         ]
@@ -465,9 +475,11 @@ class Eplace:
             texto = label if not valor else f"{label}:  {valor}"
             fonte = self.f_menu if sel else self.f_item
             txt = fonte.render(texto, True, cor)
-            self.tela.blit(txt, txt.get_rect(center=(cx, base_y + i * 78 + dy)))
+            self.tela.blit(txt, txt.get_rect(
+                center=(cx, base_y + i * 78 + dy)))
 
-        self._rodape("SETAS mover / alterar   |   ENTER confirmar   |   ESC voltar")
+        self._rodape(
+            "SETAS mover / alterar   |   ENTER confirmar   |   ESC voltar")
 
     def _rodape(self, texto):
         t = self.f_pequena.render(texto, True, CINZA)
