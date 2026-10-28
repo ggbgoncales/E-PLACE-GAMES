@@ -10,16 +10,19 @@ com animacao subindo/descendo, estilo "menu de emulador".
 Rode com:  python main.py
 """
 
+from src.jogador import GestorJogador
+from src.utils.zip_extractor import extrair_zips
+import pygame
 import os
 import sys
 import json
 import math
 import subprocess
 
-import pygame
+# Janela sem borda do tamanho do monitor (nao troca a resolucao = nao pisca)
+os.environ.setdefault("SDL_VIDEO_WINDOW_POS", "0,0")
+os.environ["SDL_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR"] = "0"
 
-from src.utils.zip_extractor import extrair_zips
-from src.jogador import GestorJogador
 
 # ---------------------------------------------------------------------------
 # Caminhos / Constantes
@@ -81,12 +84,22 @@ def listar_jogos():
         if not os.path.isdir(caminho) or nome == "imports":
             continue
         main_jogo = os.path.join(caminho, "main.py")
+
+        # Procura a imagem da capa
+        capa_path = None
+        for ext in [".png", ".jpg", ".jpeg"]:
+            p = os.path.join(COVERS_DIR, nome + ext)
+            if os.path.exists(p):
+                capa_path = p
+                break
+
         if os.path.exists(main_jogo):
             jogos.append({
                 "id": nome,
                 "titulo": nome_bonito(nome),
                 "caminho": caminho,
                 "main": main_jogo,
+                "capa": capa_path  # Adicionado aqui
             })
     return jogos
 
@@ -94,7 +107,7 @@ def listar_jogos():
 def nome_bonito(nome):
     if nome.lower().startswith("game") and nome[4:].isdigit():
         return "Game " + nome[4:]
-    return nome.capitalize()
+    return nome[:1].upper() + nome[1:]
 
 
 # ---------------------------------------------------------------------------
@@ -102,14 +115,18 @@ def nome_bonito(nome):
 # ---------------------------------------------------------------------------
 class Eplace:
     def __init__(self):
+        # ... outras variáveis que já estão no seu código ...
+        self.jogo_idx = 0
+        self.capas_cache = {}  # Adicione esta linha aqui
         pygame.init()
         pygame.display.set_caption("Eplace - Launcher")
         self.cfg = carregar_config()
 
         self.gestor = GestorJogador(os.path.join(BASE_DIR, "data"))
 
-        flags = pygame.FULLSCREEN if self.cfg.get("tela_cheia") else 0
-        self.tela = pygame.display.set_mode((LARGURA, ALTURA), flags)
+        self.janela = None
+        self.tela = pygame.Surface((LARGURA, ALTURA))   # tudo e desenhado aqui
+        self._aplicar_tela()
         self.clock = pygame.time.Clock()
 
         self.f_titulo = pygame.font.SysFont("Arial", 60, bold=True)
@@ -296,19 +313,66 @@ class Eplace:
             self.cena = "home"
 
     def _aplicar_tela(self):
-        flags = pygame.FULLSCREEN if self.cfg.get("tela_cheia") else 0
-        self.tela = pygame.display.set_mode((LARGURA, ALTURA), flags)
+        if self.cfg.get("tela_cheia"):
+            tamanho = pygame.display.get_desktop_sizes()[0]
+            self.janela = pygame.display.set_mode(tamanho, pygame.NOFRAME)
+        else:
+            self.janela = pygame.display.set_mode((LARGURA, ALTURA))
+
+    def _apresentar(self):
+        """Amplia a tela 1280x720 para a janela, sem distorcer."""
+        jw, jh = self.janela.get_size()
+        if (jw, jh) == (LARGURA, ALTURA):
+            self.janela.blit(self.tela, (0, 0))
+        else:
+            esc = min(jw / LARGURA, jh / ALTURA)
+            img = pygame.transform.smoothscale(
+                self.tela, (int(LARGURA * esc), int(ALTURA * esc)))
+            self.janela.fill(PRETO)
+            self.janela.blit(img, img.get_rect(center=(jw // 2, jh // 2)))
+        pygame.display.flip()
 
     # --------------------------------------------------------------- jogos
     def iniciar_jogo(self):
         if not self.jogos:
             return
         jogo = self.jogos[self.jogo_idx]
+
+        # Tela de "carregando" (o launcher NAO fecha, entao nada pisca)
+        self.tela.fill(PRETO)
+        txt = self.f_menu.render(
+            f"Abrindo {jogo['titulo']}...", True, (235, 235, 235))
+        self.tela.blit(txt, txt.get_rect(center=(LARGURA // 2, ALTURA // 2)))
+        self._apresentar()
+
+        env = os.environ.copy()
+        env["SDL_VIDEO_WINDOW_POS"] = "0,0"
+        env["SDL_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR"] = "0"
         try:
-            subprocess.Popen([sys.executable, jogo["main"]],
-                             cwd=jogo["caminho"])
+            proc = subprocess.Popen([sys.executable, jogo["main"]],
+                                    cwd=jogo["caminho"], env=env)
+            # espera o jogo fechar, mantendo o launcher "vivo" por tras
+            while proc.poll() is None:
+                pygame.event.pump()
+                self.clock.tick(15)
         except Exception as ex:
             print("Erro ao iniciar o jogo:", ex)
+
+        # Jogo fechou: volta direto para a tela inicial
+        pygame.event.clear()
+        self.clock.tick()
+        self.trans_ativa = False
+        self.menu_idx = 0
+        self.cena = "home"
+
+    def _recarregar_imagens(self):
+        """Recarrega as imagens depois de reabrir a janela."""
+        if os.path.exists(BG_HOME):
+            try:
+                self.bg_home_img = pygame.image.load(BG_HOME).convert()
+            except Exception:
+                self.bg_home_img = None
+        self.bg_jogos = self._carregar_bg(BG_JOGOS)
 
     # ------------------------------------------------------------- desenho
     def _bob(self, fase=0.0):
@@ -324,7 +388,7 @@ class Eplace:
             self._draw_jogos()
         elif self.cena == "config":
             self._draw_config()
-        pygame.display.flip()
+        self._apresentar()
 
     def _fundo(self, bg):
         if bg:
@@ -425,6 +489,28 @@ class Eplace:
         x_dir = LARGURA - 90
         centro_y = ALTURA // 2
         espaco = 74
+
+        # Exibir capa do jogo selecionado
+        jogo_atual = self.jogos[self.jogo_idx]
+        caminho_capa = jogo_atual.get("capa")
+
+        if caminho_capa:
+            if caminho_capa not in self.capas_cache:
+                try:
+                    img = pygame.image.load(caminho_capa).convert_alpha()
+                    # Redimensiona para um tamanho fixo (ex: 500x350)
+                    img = pygame.transform.smoothscale(img, (500, 350))
+                    self.capas_cache[caminho_capa] = img
+                except:
+                    self.capas_cache[caminho_capa] = None
+
+            capa_img = self.capas_cache[caminho_capa]
+            if capa_img:
+                rect = capa_img.get_rect(
+                    center=(LARGURA // 2 - 150, ALTURA // 2))
+                self.tela.blit(capa_img, rect)
+                pygame.draw.rect(self.tela, DESTAQUE, rect,
+                                 width=3, border_radius=4)
 
         for i, jogo in enumerate(self.jogos):
             offset = i - self.jogo_idx

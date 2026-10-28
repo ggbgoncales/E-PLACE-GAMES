@@ -1,0 +1,16 @@
+{
+  "coins": 24,
+  "best": 13,
+  "hat": "none",
+  "effect": "classic",
+  "owned_hats": [
+    "none"
+  ],
+  "owned_effects": [
+    "classic"
+  ],
+  "skin": "gold",
+  "owned_skins": [
+    "gold"
+  ]
+}

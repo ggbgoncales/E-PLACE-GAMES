@@ -1,0 +1,4035 @@
+=== ESTRUTURA ===
+./
+    .gitignore
+    README.md
+    config.json
+    exportar_projeto.py
+    main.py
+    projeto_completo.txt
+    requirements.txt
+assets/
+    DiagramaUML.png
+    covers/
+        LEIA-ME.txt
+    ui/
+        LEIA-ME.txt
+        background.png
+src/
+    jogador.py
+    games/
+        Cobrinha/
+            main.py
+        Flappy Bird/
+            README.md
+            main.py
+            requirements
+            requirements.txt
+            savegame.json
+            settings.py
+            game/
+                __init__.py
+                app.py
+        Ping pong/
+            README.md
+            main.py
+            requirements.txt
+            settings.py
+            game/
+                __init__.py
+                game.py
+                entities/
+                    __init__.py
+                    ball.py
+                    paddle.py
+                ui/
+                    __init__.py
+                    text.py
+        Sapo/
+            main.py
+            settings.py
+            game/
+                game.py
+                entities/
+                    frog.py
+                    fx.py
+                    mover.py
+        Space Invaders/
+            README.md
+            main.py
+            requirements
+            requirements.txt
+            settings.py
+            game/
+                __init__.py
+                app.py
+        imports/
+            LEIA-ME.txt
+    utils/
+        __init__.py
+        zip_extractor.py
+
+
+=== ARQUIVOS ===
+
+
+########## README.md ##########
+# Eplace - Launcher de Jogos
+
+Launcher em Python/Pygame minimalista.
+- **Tela inicial**: arte do E-PLACE como fundo + menu central (**Jogar / Configuracoes / Sair**) com animacao subindo/descendo.
+- **Tela de jogos**: lista na lateral (`game1`..`game5`) com animacao e efeito de destaque.
+
+## Como rodar
+```bash
+pip install -r requirements.txt
+python main.py
+```
+
+## Controles
+| Tela          | Teclas |
+|---------------|--------|
+| Menu inicial  | Setas cima/baixo, ENTER seleciona, ESC sai |
+| Escolher jogo | Setas cima/baixo, ENTER joga, ESC volta |
+| Configuracoes | Setas mover/alterar, ENTER confirma, ESC volta |
+
+## Estrutura
+```
+Eplace/
+├── main.py
+├── requirements.txt
+├── README.md
+├── games/
+│   ├── imports/          # coloque .zip aqui (extrai sozinho)
+│   ├── game1/ ... game5/ # cada um com main.py + assets/
+├── assets/
+│   ├── covers/           # capas opcionais dos jogos
+│   └── ui/
+│       └── background.png  # fundo da tela inicial (arte E-PLACE)
+└── utils/
+    └── zip_extractor.py
+```
+
+## Adicionar um jogo novo
+- **Pasta**: crie `games/game6/` com um `main.py` dentro. Aparece sozinho.
+- **ZIP**: nomeie `game6.zip`, jogue em `games/imports/`. Extrai sozinho.
+
+## Trocar o fundo da tela inicial
+Substitua `assets/ui/background.png` pela imagem que quiser (1280x720 ideal).
+
+
+########## config.json ##########
+{
+  "tela_cheia": true,
+  "volume": 70,
+  "titulo": "EPLACE"
+}
+
+########## main.py ##########
+"""
+Eplace - Launcher de Jogos (minimalista)
+========================================
+Tela inicial: imagem de fundo (assets/ui/background.png) + menu central
+(Jogar / Configuracoes / Sair) com animacao subindo/descendo.
+
+Tela de jogos: fundo preto + lista dos jogos na LATERAL (game1..game5)
+com animacao subindo/descendo, estilo "menu de emulador".
+
+Rode com:  python main.py
+"""
+
+import os
+import sys
+import json
+import math
+import subprocess
+
+import pygame
+
+from src.utils.zip_extractor import extrair_zips
+from src.jogador import GestorJogador
+
+# ---------------------------------------------------------------------------
+# Caminhos / Constantes
+# ---------------------------------------------------------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+SRC_DIR = os.path.join(BASE_DIR, "src")
+GAMES_DIR = os.path.join(SRC_DIR, "games")
+COVERS_DIR = os.path.join(BASE_DIR, "assets", "covers")
+UI_DIR = os.path.join(BASE_DIR, "assets", "ui")
+CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
+
+# fundos opcionais
+BG_HOME = os.path.join(UI_DIR, "background.png")
+BG_JOGOS = os.path.join(UI_DIR, "background_jogos.png")
+
+LARGURA, ALTURA = 1280, 720
+FPS = 60
+
+PRETO = (0, 0, 0)
+BRANCO = (245, 245, 245)
+CINZA = (120, 120, 120)
+DESTAQUE = (255, 255, 255)
+
+# ---------------------------------------------------------------------------
+# Config
+# ---------------------------------------------------------------------------
+CONFIG_PADRAO = {"tela_cheia": False, "volume": 70, "titulo": "EPLACE"}
+
+
+def carregar_config():
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+                base = dict(CONFIG_PADRAO)
+                base.update(json.load(f))
+                return base
+        except Exception:
+            pass
+    return dict(CONFIG_PADRAO)
+
+
+def salvar_config(cfg):
+    try:
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, indent=2, ensure_ascii=False)
+    except Exception as e:
+        print("Erro ao salvar config:", e)
+
+
+# ---------------------------------------------------------------------------
+# Jogos
+# ---------------------------------------------------------------------------
+def listar_jogos():
+    jogos = []
+    if not os.path.isdir(GAMES_DIR):
+        return jogos
+    for nome in sorted(os.listdir(GAMES_DIR)):
+        caminho = os.path.join(GAMES_DIR, nome)
+        if not os.path.isdir(caminho) or nome == "imports":
+            continue
+        main_jogo = os.path.join(caminho, "main.py")
+        if os.path.exists(main_jogo):
+            jogos.append({
+                "id": nome,
+                "titulo": nome_bonito(nome),
+                "caminho": caminho,
+                "main": main_jogo,
+            })
+    return jogos
+
+
+def nome_bonito(nome):
+    if nome.lower().startswith("game") and nome[4:].isdigit():
+        return "Game " + nome[4:]
+    return nome.capitalize()
+
+
+# ---------------------------------------------------------------------------
+# App
+# ---------------------------------------------------------------------------
+class Eplace:
+    def __init__(self):
+        pygame.init()
+        pygame.display.set_caption("Eplace - Launcher")
+        self.cfg = carregar_config()
+
+        self.gestor = GestorJogador(os.path.join(BASE_DIR, "data"))
+
+        flags = pygame.FULLSCREEN if self.cfg.get("tela_cheia") else 0
+        self.tela = pygame.display.set_mode((LARGURA, ALTURA), flags)
+        self.clock = pygame.time.Clock()
+
+        self.f_titulo = pygame.font.SysFont("Arial", 60, bold=True)
+        self.f_menu = pygame.font.SysFont("Arial", 44, bold=True)
+        self.f_item = pygame.font.SysFont("Arial", 34, bold=True)
+        self.f_pequena = pygame.font.SysFont("Arial", 18)
+
+        self.cena = "home"
+        self.rodando = True
+        self.t = 0.0                       # tempo pra animacao
+
+        self.menu_idx = 0
+        self.menu_itens = ["Jogar", "Configuracoes", "Sair"]
+        self.config_idx = 0
+
+        # HOME: guarda a imagem original da logo pra animar em tempo real
+        self.bg_home_img = None
+        if os.path.exists(BG_HOME):
+            try:
+                self.bg_home_img = pygame.image.load(BG_HOME).convert()
+            except Exception:
+                self.bg_home_img = None
+
+        if self.bg_home_img:
+            iw, ih = self.bg_home_img.get_size()
+            # escala base 'fit' (logo inteira visivel, sem animacao)
+            self.home_esc_base = min(LARGURA / iw, ALTURA / ih)
+            nw, nh = int(iw * self.home_esc_base), int(ih * self.home_esc_base)
+            self.home_esc = self.home_esc_base
+            self.home_offx = (LARGURA - nw) // 2
+            self.home_offy = (ALTURA - nh) // 2
+        else:
+            self.home_esc_base = 1.0
+            self.home_esc = 1.0
+            self.home_offx = 0
+            self.home_offy = 0
+
+        self.bg_jogos = self._carregar_bg(BG_JOGOS)
+
+        # posicao dos 3 botoes NA ARTE ORIGINAL (coords da imagem 1254x1254)
+        # [x, y, largura, altura] -> ARCADE, OPCOES, SAIR
+        self.botoes_orig = [
+            [324, 737, 623, 114],   # Jogar   (ARCADE)
+            [324, 875, 623, 108],   # Config  (OPCOES)
+            [324, 1007, 623, 108],  # Sair    (SAIR)
+        ]
+
+        # estado da transicao (logo indo pro canto = marca dagua)
+        self.trans_ativa = False
+        self.trans_t = 0.0
+        self.TRANS_DUR = 0.7            # duracao da transicao (segundos)
+        self.trans_reversa = False     # False = home->jogos | True = jogos->home
+
+        extrair_zips(GAMES_DIR)
+        self.jogos = listar_jogos()
+        self.jogo_idx = 0
+
+    def _carregar_bg(self, caminho):
+        """Carrega imagem no modo 'cover' (preenche a tela, corta o excesso)."""
+        if not os.path.exists(caminho):
+            return None
+        try:
+            img = pygame.image.load(caminho).convert()
+            iw, ih = img.get_size()
+            escala = max(LARGURA / iw, ALTURA / ih)
+            nw, nh = int(iw * escala), int(ih * escala)
+            img = pygame.transform.smoothscale(img, (nw, nh))
+            x = (nw - LARGURA) // 2
+            y = (nh - ALTURA) // 2
+            recorte = pygame.Surface((LARGURA, ALTURA))
+            recorte.blit(img, (0, 0), (x, y, LARGURA, ALTURA))
+            return recorte
+        except Exception:
+            return None
+
+    def _carregar_bg_fit(self, caminho):
+        """Carrega no modo 'fit' (imagem inteira visivel, bordas pretas).
+        Retorna (surface_tela_cheia, escala, offx, offy) pra posicionar o seletor.
+        """
+        if not os.path.exists(caminho):
+            return None, 1.0, 0, 0
+        try:
+            img = pygame.image.load(caminho).convert()
+            iw, ih = img.get_size()
+            escala = min(LARGURA / iw, ALTURA / ih)
+            nw, nh = int(iw * escala), int(ih * escala)
+            img = pygame.transform.smoothscale(img, (nw, nh))
+            offx = (LARGURA - nw) // 2
+            offy = (ALTURA - nh) // 2
+            base = pygame.Surface((LARGURA, ALTURA))
+            base.fill(PRETO)
+            base.blit(img, (offx, offy))
+            return base, escala, offx, offy
+        except Exception:
+            return None, 1.0, 0, 0
+
+    # ------------------------------------------------------------------ loop
+    def run(self):
+        while self.rodando:
+            dt = self.clock.get_time() / 1000.0
+            self.t += dt
+            # avanca a transicao
+            if self.cena == "transicao":
+                self.trans_t += dt
+                if self.trans_t >= self.TRANS_DUR:
+                    # reversa termina na HOME, normal termina em JOGOS
+                    self.cena = "home" if self.trans_reversa else "jogos"
+            self.eventos()
+            self.desenhar()
+            self.clock.tick(FPS)
+        pygame.quit()
+        sys.exit()
+
+    # -------------------------------------------------------------- eventos
+    def eventos(self):
+        for e in pygame.event.get():
+            if e.type == pygame.QUIT:
+                self.rodando = False
+            elif e.type == pygame.KEYDOWN:
+                if self.cena == "home":
+                    self._ev_home(e)
+                elif self.cena == "jogos":
+                    self._ev_jogos(e)
+                elif self.cena == "config":
+                    self._ev_config(e)
+
+    def _ev_home(self, e):
+        if e.key in (pygame.K_UP, pygame.K_w):
+            self.menu_idx = (self.menu_idx - 1) % len(self.menu_itens)
+        elif e.key in (pygame.K_DOWN, pygame.K_s):
+            self.menu_idx = (self.menu_idx + 1) % len(self.menu_itens)
+        elif e.key in (pygame.K_RETURN, pygame.K_SPACE):
+            escolha = self.menu_itens[self.menu_idx]
+            if escolha == "Jogar":
+                self.jogos = listar_jogos()
+                self.trans_ativa = True
+                self.trans_reversa = False
+                self.trans_t = 0.0
+                self.cena = "transicao"
+            elif escolha == "Configuracoes":
+                self.cena = "config"
+            elif escolha == "Sair":
+                self.rodando = False
+        elif e.key == pygame.K_ESCAPE:
+            self.rodando = False
+
+    def _ev_jogos(self, e):
+        if e.key in (pygame.K_UP, pygame.K_w):
+            if self.jogos:
+                self.jogo_idx = (self.jogo_idx - 1) % len(self.jogos)
+        elif e.key in (pygame.K_DOWN, pygame.K_s):
+            if self.jogos:
+                self.jogo_idx = (self.jogo_idx + 1) % len(self.jogos)
+        elif e.key in (pygame.K_RETURN, pygame.K_SPACE):
+            self.iniciar_jogo()
+        elif e.key in (pygame.K_BACKSPACE, pygame.K_ESCAPE):
+            # volta pra home com a animacao reversa (logo cresce do canto)
+            self.trans_ativa = True
+            self.trans_reversa = True
+            self.trans_t = 0.0
+            self.cena = "transicao"
+
+    def _ev_config(self, e):
+        opcoes = ["tela_cheia", "volume", "voltar"]
+        if e.key in (pygame.K_UP, pygame.K_w):
+            self.config_idx = (self.config_idx - 1) % len(opcoes)
+        elif e.key in (pygame.K_DOWN, pygame.K_s):
+            self.config_idx = (self.config_idx + 1) % len(opcoes)
+        elif e.key in (pygame.K_LEFT, pygame.K_a, pygame.K_RIGHT, pygame.K_d):
+            alvo = opcoes[self.config_idx]
+            direcao = 1 if e.key in (pygame.K_RIGHT, pygame.K_d) else -1
+            if alvo == "tela_cheia":
+                self.cfg["tela_cheia"] = not self.cfg["tela_cheia"]
+                self._aplicar_tela()
+            elif alvo == "volume":
+                self.cfg["volume"] = max(
+                    0, min(100, self.cfg["volume"] + direcao * 5))
+        elif e.key in (pygame.K_RETURN, pygame.K_SPACE):
+            if opcoes[self.config_idx] == "voltar":
+                salvar_config(self.cfg)
+                self.cena = "home"
+        elif e.key == pygame.K_ESCAPE:
+            salvar_config(self.cfg)
+            self.cena = "home"
+
+    def _aplicar_tela(self):
+        flags = pygame.FULLSCREEN if self.cfg.get("tela_cheia") else 0
+        self.tela = pygame.display.set_mode((LARGURA, ALTURA), flags)
+
+    # --------------------------------------------------------------- jogos
+    def iniciar_jogo(self):
+        if not self.jogos:
+            return
+        jogo = self.jogos[self.jogo_idx]
+        try:
+            subprocess.Popen([sys.executable, jogo["main"]],
+                             cwd=jogo["caminho"])
+        except Exception as ex:
+            print("Erro ao iniciar o jogo:", ex)
+
+    # ------------------------------------------------------------- desenho
+    def _bob(self, fase=0.0):
+        """deslocamento vertical suave (sobe/desce)."""
+        return math.sin(self.t * 3.0 + fase) * 6
+
+    def desenhar(self):
+        if self.cena == "home":
+            self._draw_home()
+        elif self.cena == "transicao":
+            self._draw_transicao()
+        elif self.cena == "jogos":
+            self._draw_jogos()
+        elif self.cena == "config":
+            self._draw_config()
+        pygame.display.flip()
+
+    def _fundo(self, bg):
+        if bg:
+            self.tela.blit(bg, (0, 0))
+        else:
+            self.tela.fill(PRETO)
+
+    def _texto_sombra(self, texto, fonte, cor, centro):
+        """Desenha texto com sombra pra ficar legivel sobre a arte."""
+        sombra = fonte.render(texto, True, PRETO)
+        self.tela.blit(sombra, sombra.get_rect(
+            center=(centro[0] + 2, centro[1] + 2)))
+        img = fonte.render(texto, True, cor)
+        rect = img.get_rect(center=centro)
+        self.tela.blit(img, rect)
+        return rect
+
+    def _botao_tela(self, i, esc, ox, oy):
+        """Converte o botao i (coords da arte) para o retangulo na tela."""
+        x, y, w, h = self.botoes_orig[i]
+        return pygame.Rect(int(ox + x * esc), int(oy + y * esc),
+                           int(w * esc), int(h * esc))
+
+    def _desenhar_logo(self, esc, ox, oy, alpha=255):
+        """Desenha a arte E-PLACE (sem animacao) na escala/posicao dadas."""
+        if not self.bg_home_img:
+            return
+        iw, ih = self.bg_home_img.get_size()
+        nw, nh = max(1, int(iw * esc)), max(1, int(ih * esc))
+        img = pygame.transform.smoothscale(self.bg_home_img, (nw, nh))
+        if alpha < 255:
+            img = img.copy()
+            img.set_alpha(alpha)
+        self.tela.blit(img, (ox, oy))
+
+    # ---- HOME: logo E-PLACE fixa + seletor fixo sobre os botoes ----
+    def _draw_home(self):
+        self.tela.fill(PRETO)
+        esc, ox, oy = self.home_esc_base, self.home_offx, self.home_offy
+        self._desenhar_logo(esc, ox, oy)
+
+        rect = self._botao_tela(self.menu_idx, esc, ox, oy)
+        sel = rect.inflate(18, 12)
+
+        for k, alfa in ((10, 40), (6, 80), (2, 160)):
+            s = pygame.Surface((sel.w + k * 2, sel.h + k * 2), pygame.SRCALPHA)
+            pygame.draw.rect(s, (255, 255, 255, alfa),
+                             s.get_rect(), width=3, border_radius=14)
+            self.tela.blit(s, (sel.x - k, sel.y - k))
+        pygame.draw.rect(self.tela, DESTAQUE, sel, width=4, border_radius=14)
+
+        self._rodape("SETAS mover   |   ENTER selecionar   |   ESC sair")
+
+    # ---- TRANSICAO: logo desliza pro canto sup. esquerdo (marca dagua) ----
+    def _marca_dagua_alvo(self):
+        """Escala/posicao final da logo como marca dagua no canto sup. esq."""
+        esc = self.home_esc_base * 0.28          # bem menor
+        ox, oy = 20, 20                          # canto superior esquerdo
+        return esc, ox, oy
+
+    def _draw_transicao(self):
+        self.tela.fill(PRETO)
+        p = min(1.0, self.trans_t / self.TRANS_DUR)
+        # easing suave (ease-in-out)
+        p = p * p * (3 - 2 * p)
+
+        # na reversa, o progresso vai de 1 -> 0 (do canto de volta pro centro)
+        if self.trans_reversa:
+            p = 1.0 - p
+            # na volta, tambem mostra a lista de jogos "saindo" ao fundo? nao,
+            # mantemos so a logo pra ficar limpo, igual a ida.
+
+        e0, x0, y0 = self.home_esc_base, self.home_offx, self.home_offy   # centro
+        e1, x1, y1 = self._marca_dagua_alvo()                            # canto
+
+        esc = e0 + (e1 - e0) * p
+        ox = int(x0 + (x1 - x0) * p)
+        oy = int(y0 + (y1 - y0) * p)
+        alpha = int(255 + (110 - 255) * p)       # 255 no centro, 110 no canto
+
+        self._desenhar_logo(esc, ox, oy, alpha)
+
+    # ---- JOGOS (lista na lateral, animada, fundo preto) ----
+    def _draw_jogos(self):
+        self._fundo(self.bg_jogos)
+
+        # logo como marca dagua no canto superior esquerdo
+        e1, x1, y1 = self._marca_dagua_alvo()
+        self._desenhar_logo(e1, x1, y1, alpha=110)
+
+        if not self.jogos:
+            aviso = self.f_menu.render("Nenhum jogo em /games", True, CINZA)
+            self.tela.blit(aviso, aviso.get_rect(
+                center=(LARGURA // 2, ALTURA // 2)))
+            self._rodape("ESC voltar")
+            return
+
+        x_dir = LARGURA - 90
+        centro_y = ALTURA // 2
+        espaco = 74
+
+        for i, jogo in enumerate(self.jogos):
+            offset = i - self.jogo_idx
+            sel = (offset == 0)
+            y = centro_y + offset * espaco
+            if y < -40 or y > ALTURA + 40:
+                continue
+
+            if sel:
+                dy = self._bob()
+                cor = DESTAQUE
+                fonte = self.f_menu
+            else:
+                dy = 0
+                fade = max(60, 160 - abs(offset) * 35)
+                cor = (fade, fade, fade)
+                fonte = self.f_item
+
+            txt = fonte.render(jogo["titulo"], True, cor)
+            rect = txt.get_rect(midright=(x_dir, y + dy))
+            self.tela.blit(txt, rect)
+
+            if sel:
+                pygame.draw.rect(self.tela, DESTAQUE,
+                                 (rect.right + 12, rect.centery - 14, 5, 28),
+                                 border_radius=2)
+
+        self._rodape(
+            "SETAS cima/baixo   |   ENTER jogar   |   BACKSPACE / ESC voltar (animado)")
+
+    def _draw_config(self):
+        self._fundo(None)
+        titulo = self.f_titulo.render("CONFIGURACOES", True, BRANCO)
+        self.tela.blit(titulo, titulo.get_rect(center=(LARGURA // 2, 120)))
+
+        opcoes = [
+            ("Tela cheia",
+             "LIGADO" if self.cfg["tela_cheia"] else "DESLIGADO"),
+            ("Volume", f"{self.cfg['volume']}%"),
+            ("Voltar", ""),
+        ]
+        cx = LARGURA // 2
+        base_y = 300
+        for i, (label, valor) in enumerate(opcoes):
+            sel = (i == self.config_idx)
+            dy = self._bob(i) if sel else 0
+            cor = DESTAQUE if sel else CINZA
+            texto = label if not valor else f"{label}:  {valor}"
+            fonte = self.f_menu if sel else self.f_item
+            txt = fonte.render(texto, True, cor)
+            self.tela.blit(txt, txt.get_rect(
+                center=(cx, base_y + i * 78 + dy)))
+
+        self._rodape(
+            "SETAS mover / alterar   |   ENTER confirmar   |   ESC voltar")
+
+    def _rodape(self, texto):
+        t = self.f_pequena.render(texto, True, CINZA)
+        self.tela.blit(t, (24, ALTURA - 34))
+
+
+if __name__ == "__main__":
+    Eplace().run()
+
+
+########## requirements.txt ##########
+pygame>=2.5.0
+
+
+########## assets/covers/LEIA-ME.txt ##########
+Capas dos jogos (opcional). Nome igual a pasta do jogo: game1.png, game2.jpg ...
+
+
+########## assets/ui/LEIA-ME.txt ##########
+IMAGENS DE FUNDO
+================
+  background.png        -> fundo da TELA INICIAL (menu)   [JA CONFIGURADO]
+  background_jogos.png  -> fundo da TELA DE JOGOS (opcional)
+Tamanho recomendado: 1280x720 (ou quadrado, que ele ajusta). Sem imagem = preto.
+
+
+########## src/jogador.py ##########
+import os
+import json
+
+
+class GestorJogador:
+    def __init__(self, data_dir):
+        self.ficheiro_pontuacoes = os.path.join(data_dir, "highscore.json")
+        self.jogador_atual = "Convidado"
+        self.pontuacoes = self._carregar_pontuacoes()
+
+    def _carregar_pontuacoes(self):
+        if os.path.exists(self.ficheiro_pontuacoes):
+            try:
+                with open(self.ficheiro_pontuacoes, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return {}
+
+    def obter_pontuacao(self, jogo_id):
+        return self.pontuacoes.get(jogo_id, 0)
+
+    def registar_pontuacao(self, jogo_id, pontuacao):
+        # Atualiza apenas se for um novo recorde
+        atual = self.obter_pontuacao(jogo_id)
+        if pontuacao > atual:
+            self.pontuacoes[jogo_id] = pontuacao
+            self._salvar_pontuacoes()
+
+    def _salvar_pontuacoes(self):
+        try:
+            with open(self.ficheiro_pontuacoes, "w", encoding="utf-8") as f:
+                json.dump(self.pontuacoes, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            print("Erro ao guardar pontuações:", e)
+
+
+########## src/games/Cobrinha/main.py ##########
+import math
+import random
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+
+import pygame
+
+# ============================================================
+# Cobra Neon - jogo completo em um unico arquivo
+# Controles: setas/WASD, P/ESC pausa, M som, F11 tela cheia
+# Requer: pip install pygame
+# ============================================================
+
+WIDTH, HEIGHT = 1100, 720
+HUD_W = 260
+PLAY_W = WIDTH - HUD_W
+CELL = 24
+COLS = PLAY_W // CELL
+ROWS = HEIGHT // CELL
+FPS = 120
+SAVE_FILE = Path.home() / ".cobra_neon_recorde.txt"
+
+BG = (7, 11, 22)
+PANEL = (12, 20, 36)
+GRID = (19, 32, 49)
+WHITE = (238, 246, 255)
+MUTED = (134, 158, 184)
+GREEN = (43, 235, 150)
+GREEN_DARK = (18, 145, 101)
+CYAN = (45, 210, 255)
+PINK = (255, 77, 143)
+GOLD = (255, 201, 74)
+RED = (255, 77, 91)
+
+pygame.init()
+pygame.display.set_caption("Cobra Neon")
+
+
+def clamp(value, low, high):
+    return max(low, min(high, value))
+
+
+def load_record():
+    try:
+        return max(0, int(SAVE_FILE.read_text(encoding="utf-8").strip()))
+    except Exception:
+        return 0
+
+
+def save_record(value):
+    try:
+        SAVE_FILE.write_text(str(value), encoding="utf-8")
+    except Exception:
+        pass
+
+
+class SilentSound:
+    def play(self):
+        pass
+
+
+class SoundBank:
+    """Efeitos sintetizados em memoria, sem arquivos externos."""
+
+    def __init__(self):
+        self.enabled = True
+        self.eat = SilentSound()
+        self.turn = SilentSound()
+        self.game_over = SilentSound()
+        try:
+            pygame.mixer.init(frequency=22050, size=-16, channels=1)
+            from array import array
+
+            self.eat = self._tone(array, 720, 0.08, 0.3, 980)
+            self.turn = self._tone(array, 260, 0.025, 0.08, 300)
+            self.game_over = self._tone(array, 240, 0.35, 0.3, 70)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _tone(array_type, start_hz, duration, volume, end_hz):
+        sample_rate = 22050
+        count = int(sample_rate * duration)
+        samples = array_type("h")
+        phase = 0.0
+        for i in range(count):
+            t = i / max(1, count - 1)
+            hz = start_hz + (end_hz - start_hz) * t
+            phase += 2 * math.pi * hz / sample_rate
+            envelope = min(1.0, i / 100) * (1.0 - t) ** 0.7
+            samples.append(int(32767 * volume * envelope * math.sin(phase)))
+        return pygame.mixer.Sound(buffer=samples)
+
+    def play(self, sound):
+        if self.enabled:
+            sound.play()
+
+
+@dataclass
+class Particle:
+    x: float
+    y: float
+    vx: float
+    vy: float
+    life: float
+    color: tuple
+    radius: float
+
+    def update(self, dt):
+        self.x += self.vx * dt
+        self.y += self.vy * dt
+        self.vx *= 0.97
+        self.vy *= 0.97
+        self.life -= dt
+        self.radius = max(0, self.radius - dt * 4)
+
+    def draw(self, surface):
+        if self.life <= 0 or self.radius <= 0:
+            return
+        alpha = int(255 * clamp(self.life / 0.7, 0, 1))
+        layer = pygame.Surface((int(self.radius * 4 + 4), int(self.radius * 4 + 4)), pygame.SRCALPHA)
+        pygame.draw.circle(layer, (*self.color, alpha), layer.get_rect().center, int(self.radius))
+        surface.blit(layer, (self.x - layer.get_width() / 2, self.y - layer.get_height() / 2))
+
+
+class Button:
+    def __init__(self, rect, text, action, accent=GREEN):
+        self.rect = pygame.Rect(rect)
+        self.text = text
+        self.action = action
+        self.accent = accent
+        self.hover = 0.0
+
+    def update(self, mouse, dt):
+        target = 1.0 if self.rect.collidepoint(mouse) else 0.0
+        self.hover += (target - self.hover) * min(1, dt * 12)
+
+    def draw(self, surface, font):
+        grow = int(4 * self.hover)
+        rect = self.rect.inflate(grow, grow)
+        shadow = rect.move(0, 7)
+        pygame.draw.rect(surface, (3, 7, 14), shadow, border_radius=16)
+        color = tuple(int(PANEL[i] + (self.accent[i] - PANEL[i]) * (0.28 + self.hover * 0.18)) for i in range(3))
+        pygame.draw.rect(surface, color, rect, border_radius=16)
+        pygame.draw.rect(surface, self.accent, rect, 2, border_radius=16)
+        label = font.render(self.text, True, WHITE)
+        surface.blit(label, label.get_rect(center=rect.center))
+
+
+class SnakeGame:
+    def __init__(self):
+        self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+        self.canvas = pygame.Surface((WIDTH, HEIGHT))
+        self.clock = pygame.time.Clock()
+        self.font_sm = pygame.font.SysFont("segoeui", 18)
+        self.font_md = pygame.font.SysFont("segoeui", 25, bold=True)
+        self.font_lg = pygame.font.SysFont("segoeui", 50, bold=True)
+        self.font_xl = pygame.font.SysFont("segoeui", 76, bold=True)
+        self.sounds = SoundBank()
+        self.record = load_record()
+        self.particles = []
+        self.state = "menu"
+        self.fullscreen = True
+        self.difficulty = 1
+        self.difficulties = [
+            ("TRANQUILO", 7.0, CYAN),
+            ("CLASSICO", 10.0, GREEN),
+            ("INSANO", 14.0, PINK),
+        ]
+        self.buttons = []
+        self.reset()
+        self.make_menu_buttons()
+
+    def reset(self):
+        cx, cy = COLS // 2, ROWS // 2
+        self.snake = [(cx, cy), (cx - 1, cy), (cx - 2, cy), (cx - 3, cy)]
+        self.direction = (1, 0)
+        self.next_direction = (1, 0)
+        self.food = (0, 0)
+        self.special_food = None
+        self.special_timer = 0.0
+        self.move_acc = 0.0
+        self.score = 0
+        self.combo = 1
+        self.combo_timer = 0.0
+        self.play_time = 0.0
+        self.food_pulse = 0.0
+        self.blink_timer = random.uniform(1.5, 3.5)
+        self.blink = 0.0
+        self.tongue_timer = 0.0
+        self.shake = 0.0
+        self.spawn_food()
+
+    def spawn_food(self):
+        free = [(x, y) for x in range(COLS) for y in range(ROWS) if (x, y) not in self.snake]
+        if not free:
+            self.state = "gameover"
+            return
+        self.food = random.choice(free)
+        if self.score and self.score % 50 == 0 and self.special_food is None:
+            candidates = [p for p in free if p != self.food]
+            if candidates:
+                self.special_food = random.choice(candidates)
+                self.special_timer = 7.0
+
+    def make_menu_buttons(self):
+        self.buttons = [
+            Button((WIDTH // 2 - 155, 420, 310, 62), "JOGAR", "play", GREEN),
+            Button((WIDTH // 2 - 155, 498, 310, 55), "DIFICULDADE", "difficulty", CYAN),
+            Button((WIDTH // 2 - 155, 569, 310, 55), "SAIR", "quit", PINK),
+        ]
+
+    def set_state(self, action):
+        if action == "play":
+            self.reset()
+            self.state = "playing"
+        elif action == "difficulty":
+            self.difficulty = (self.difficulty + 1) % len(self.difficulties)
+        elif action == "quit":
+            pygame.quit()
+            sys.exit()
+
+    def toggle_fullscreen(self):
+        self.fullscreen = not self.fullscreen
+
+        if self.fullscreen:
+            self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+        else:
+            self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+
+
+    def add_burst(self, cell, color, count=18):
+        x = cell[0] * CELL + CELL / 2
+        y = cell[1] * CELL + CELL / 2
+        for _ in range(count):
+            angle = random.random() * math.tau
+            speed = random.uniform(45, 160)
+            self.particles.append(Particle(x, y, math.cos(angle) * speed, math.sin(angle) * speed,
+                                           random.uniform(0.35, 0.75), color, random.uniform(2, 5)))
+
+    def handle_event(self, event):
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_F11:
+                self.toggle_fullscreen()
+            elif event.key == pygame.K_m:
+                self.sounds.enabled = not self.sounds.enabled
+            elif event.key in (pygame.K_ESCAPE, pygame.K_p):
+                if self.state == "playing":
+                    self.state = "paused"
+                elif self.state == "paused":
+                    self.state = "playing"
+                elif self.state == "gameover":
+                    self.state = "menu"
+            elif self.state == "menu" and event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                self.set_state("play")
+            elif self.state == "gameover" and event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                self.set_state("play")
+            elif self.state == "playing":
+                directions = {
+                    pygame.K_UP: (0, -1), pygame.K_w: (0, -1),
+                    pygame.K_DOWN: (0, 1), pygame.K_s: (0, 1),
+                    pygame.K_LEFT: (-1, 0), pygame.K_a: (-1, 0),
+                    pygame.K_RIGHT: (1, 0), pygame.K_d: (1, 0),
+                }
+                if event.key in directions:
+                    candidate = directions[event.key]
+                    if candidate != (-self.direction[0], -self.direction[1]):
+                        self.next_direction = candidate
+                        self.sounds.play(self.sounds.turn)
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.state == "menu":
+            virtual = self.virtual_mouse(event.pos)
+            for button in self.buttons:
+                if button.rect.collidepoint(virtual):
+                    self.set_state(button.action)
+
+    def virtual_mouse(self, pos):
+        sw, sh = self.screen.get_size()
+        scale = min(sw / WIDTH, sh / HEIGHT)
+        ox = (sw - WIDTH * scale) / 2
+        oy = (sh - HEIGHT * scale) / 2
+        return ((pos[0] - ox) / scale, (pos[1] - oy) / scale)
+
+    def update(self, dt):
+        mouse = self.virtual_mouse(pygame.mouse.get_pos())
+        for button in self.buttons:
+            button.update(mouse, dt)
+        for p in self.particles:
+            p.update(dt)
+        self.particles = [p for p in self.particles if p.life > 0]
+        self.shake = max(0, self.shake - dt * 30)
+        self.food_pulse += dt * 4
+        self.blink_timer -= dt
+        if self.blink_timer <= 0:
+            self.blink = 1.0
+            self.blink_timer = random.uniform(2.0, 4.5)
+        self.blink = max(0.0, self.blink - dt * 8)
+        self.tongue_timer = (self.tongue_timer + dt) % 3.2
+
+        if self.state != "playing":
+            return
+        self.play_time += dt
+        self.combo_timer = max(0, self.combo_timer - dt)
+        if self.combo_timer <= 0:
+            self.combo = 1
+        if self.special_food:
+            self.special_timer -= dt
+            if self.special_timer <= 0:
+                self.special_food = None
+
+        speed = self.difficulties[self.difficulty][1] + min(6, self.score / 90)
+        self.move_acc += dt
+        step = 1.0 / speed
+        while self.move_acc >= step:
+            self.move_acc -= step
+            self.move_snake()
+            if self.state != "playing":
+                break
+
+    def move_snake(self):
+        self.direction = self.next_direction
+        hx, hy = self.snake[0]
+        dx, dy = self.direction
+        head = (hx + dx, hy + dy)
+        if head[0] < 0 or head[0] >= COLS or head[1] < 0 or head[1] >= ROWS or head in self.snake[:-1]:
+            self.game_over()
+            return
+        self.snake.insert(0, head)
+        ate = False
+        if head == self.food:
+            points = 10 * self.combo
+            self.score += points
+            self.combo = min(5, self.combo + 1)
+            self.combo_timer = 2.2
+            self.add_burst(head, PINK)
+            self.sounds.play(self.sounds.eat)
+            self.spawn_food()
+            ate = True
+        elif self.special_food and head == self.special_food:
+            self.score += 35 * self.combo
+            self.combo = min(5, self.combo + 1)
+            self.combo_timer = 3.0
+            self.add_burst(head, GOLD, 30)
+            self.special_food = None
+            self.sounds.play(self.sounds.eat)
+            ate = True
+        if not ate:
+            self.snake.pop()
+
+    def game_over(self):
+        self.state = "gameover"
+        self.shake = 10
+        self.add_burst(self.snake[0], RED, 45)
+        self.sounds.play(self.sounds.game_over)
+        if self.score > self.record:
+            self.record = self.score
+            save_record(self.record)
+
+    def glow_circle(self, surface, pos, radius, color, strength=3):
+        size = int(radius * 5)
+        layer = pygame.Surface((size, size), pygame.SRCALPHA)
+        center = size // 2
+        for i in range(strength, 0, -1):
+            r = int(radius * (1 + i * 0.45))
+            alpha = int(15 + 20 * (strength - i + 1) / strength)
+            pygame.draw.circle(layer, (*color, alpha), (center, center), r)
+        pygame.draw.circle(layer, color, (center, center), int(radius))
+        surface.blit(layer, (pos[0] - center, pos[1] - center))
+
+    def draw_background(self):
+        self.canvas.fill(BG)
+        for y in range(0, HEIGHT, CELL):
+            for x in range(0, PLAY_W, CELL):
+                if (x // CELL + y // CELL) % 2 == 0:
+                    pygame.draw.rect(self.canvas, (9, 16, 29), (x, y, CELL, CELL))
+        for x in range(0, PLAY_W + 1, CELL):
+            pygame.draw.line(self.canvas, GRID, (x, 0), (x, HEIGHT), 1)
+        for y in range(0, HEIGHT + 1, CELL):
+            pygame.draw.line(self.canvas, GRID, (0, y), (PLAY_W, y), 1)
+        pygame.draw.rect(self.canvas, PANEL, (PLAY_W, 0, HUD_W, HEIGHT))
+        pygame.draw.line(self.canvas, CYAN, (PLAY_W, 0), (PLAY_W, HEIGHT), 2)
+
+    def cell_center(self, cell):
+        return (cell[0] * CELL + CELL // 2, cell[1] * CELL + CELL // 2)
+
+    def draw_food(self, cell, special=False):
+        x, y = self.cell_center(cell)
+        pulse = 1 + math.sin(self.food_pulse) * 0.12
+        color = GOLD if special else PINK
+        self.glow_circle(self.canvas, (x, y), 8 * pulse, color, 3)
+        if not special:
+            pygame.draw.circle(self.canvas, (255, 180, 205), (x - 3, y - 3), 2)
+            pygame.draw.line(self.canvas, GREEN, (x, y - 7), (x + 4, y - 12), 3)
+        else:
+            points = []
+            for i in range(10):
+                a = -math.pi / 2 + i * math.pi / 5
+                r = 10 if i % 2 == 0 else 4
+                points.append((x + math.cos(a) * r, y + math.sin(a) * r))
+            pygame.draw.polygon(self.canvas, WHITE, points, 2)
+
+    def draw_snake(self):
+        if not self.snake:
+            return
+        # Corpo sombreado e conectado
+        centers = [self.cell_center(p) for p in self.snake]
+        if len(centers) > 1:
+            pygame.draw.lines(self.canvas, (4, 44, 38), False, [(x + 3, y + 5) for x, y in centers], CELL - 5)
+            pygame.draw.lines(self.canvas, GREEN_DARK, False, centers, CELL - 7)
+        for i in range(len(self.snake) - 1, -1, -1):
+            x, y = centers[i]
+            t = i / max(1, len(self.snake) - 1)
+            color = (
+                int(GREEN[0] * (1 - t * 0.45)),
+                int(GREEN[1] * (1 - t * 0.35)),
+                int(GREEN[2] * (1 - t * 0.42)),
+            )
+            radius = 9 if i else 12
+            pygame.draw.circle(self.canvas, (4, 42, 35), (x + 2, y + 4), radius + 1)
+            pygame.draw.circle(self.canvas, color, (x, y), radius)
+            if i > 0 and i % 2 == 0:
+                pygame.draw.circle(self.canvas, (113, 255, 200), (x - 3, y - 3), 2)
+        self.draw_head_face(centers[0])
+
+    def draw_head_face(self, center):
+        x, y = center
+        dx, dy = self.direction
+        # Vetor perpendicular para posicionar olhos
+        px, py = -dy, dx
+        forward = (dx * 4, dy * 4)
+        eye_sep = 5
+        lid = clamp(1.0 - self.blink * 2.3, 0.12, 1.0)
+        for side in (-1, 1):
+            ex = int(x + forward[0] + px * eye_sep * side)
+            ey = int(y + forward[1] + py * eye_sep * side)
+            if dx != 0:
+                eye_rect = pygame.Rect(ex - 3, ey - int(5 * lid), 6, max(2, int(10 * lid)))
+            else:
+                eye_rect = pygame.Rect(ex - int(5 * lid), ey - 3, max(2, int(10 * lid)), 6)
+            pygame.draw.ellipse(self.canvas, WHITE, eye_rect)
+            pupil_x = ex + dx * 2
+            pupil_y = ey + dy * 2
+            pygame.draw.circle(self.canvas, (6, 16, 27), (pupil_x, pupil_y), 2)
+            pygame.draw.circle(self.canvas, CYAN, (pupil_x, pupil_y), 1)
+        # Lingua aparece periodicamente e se movimenta
+        tongue_phase = self.tongue_timer
+        if tongue_phase < 0.62:
+            amount = math.sin((tongue_phase / 0.62) * math.pi)
+            start = (x + dx * 11, y + dy * 11)
+            end = (x + dx * (12 + 14 * amount), y + dy * (12 + 14 * amount))
+            pygame.draw.line(self.canvas, PINK, start, end, 3)
+            tipx, tipy = end
+            fork = 5
+            pygame.draw.line(self.canvas, PINK, end, (tipx + dx * 5 + px * fork, tipy + dy * 5 + py * fork), 2)
+            pygame.draw.line(self.canvas, PINK, end, (tipx + dx * 5 - px * fork, tipy + dy * 5 - py * fork), 2)
+
+    def draw_hud(self):
+        x = PLAY_W + 28
+        title = self.font_md.render("COBRA NEON", True, GREEN)
+        self.canvas.blit(title, (x, 30))
+        self.canvas.blit(self.font_sm.render("ARCADE PROFISSIONAL", True, MUTED), (x, 64))
+
+        self.stat_card(x, 112, "PONTOS", str(self.score), PINK)
+        self.stat_card(x, 216, "RECORDE", str(self.record), GOLD)
+        self.stat_card(x, 320, "TAMANHO", str(len(self.snake)), GREEN)
+
+        diff_name, _, diff_color = self.difficulties[self.difficulty]
+        pygame.draw.rect(self.canvas, (8, 15, 27), (x, 428, 204, 64), border_radius=14)
+        self.canvas.blit(self.font_sm.render("MODO", True, MUTED), (x + 16, 437))
+        self.canvas.blit(self.font_md.render(diff_name, True, diff_color), (x + 16, 458))
+
+        if self.combo > 1 and self.combo_timer > 0:
+            combo = self.font_md.render(f"COMBO x{self.combo}", True, CYAN)
+            self.canvas.blit(combo, combo.get_rect(center=(PLAY_W + HUD_W // 2, 530)))
+            bar = pygame.Rect(x, 553, 204, 8)
+            pygame.draw.rect(self.canvas, (30, 46, 61), bar, border_radius=4)
+            fill = bar.copy()
+            fill.width = int(bar.width * self.combo_timer / 3.0)
+            pygame.draw.rect(self.canvas, CYAN, fill, border_radius=4)
+
+        controls = ["WASD / SETAS  Mover", "P / ESC       Pausar", "M             Som", "F11           Tela cheia"]
+        self.canvas.blit(self.font_sm.render("CONTROLES", True, WHITE), (x, 598))
+        for i, line in enumerate(controls):
+            self.canvas.blit(pygame.font.SysFont("consolas", 14).render(line, True, MUTED), (x, 628 + i * 20))
+
+    def stat_card(self, x, y, label, value, color):
+        rect = pygame.Rect(x, y, 204, 84)
+        pygame.draw.rect(self.canvas, (8, 15, 27), rect, border_radius=14)
+        pygame.draw.rect(self.canvas, (*color, 255), rect, 1, border_radius=14)
+        self.canvas.blit(self.font_sm.render(label, True, MUTED), (x + 16, y + 12))
+        val = self.font_lg.render(value, True, WHITE)
+        self.canvas.blit(val, (x + 14, y + 29))
+
+    def draw_menu(self):
+        self.canvas.fill(BG)
+        # Fundo decorativo
+        for i in range(12):
+            x = (i * 113 + int(pygame.time.get_ticks() * 0.02)) % (WIDTH + 100) - 50
+            y = 100 + (i * 67) % 520
+            self.glow_circle(self.canvas, (x, y), 2 + (i % 3), CYAN if i % 2 else GREEN, 2)
+        logo = self.font_xl.render("COBRA", True, WHITE)
+        neon = self.font_xl.render("NEON", True, GREEN)
+        self.canvas.blit(logo, logo.get_rect(center=(WIDTH // 2 - 88, 138)))
+        self.canvas.blit(neon, neon.get_rect(center=(WIDTH // 2 + 128, 138)))
+        subtitle = self.font_md.render("Sobreviva. Cresca. Supere o recorde.", True, MUTED)
+        self.canvas.blit(subtitle, subtitle.get_rect(center=(WIDTH // 2, 210)))
+
+        # Mascote demonstrando olhos e lingua
+        old_snake, old_dir = self.snake, self.direction
+        self.snake = [(22 - i, 12) for i in range(10)]
+        self.direction = (1, 0)
+        self.draw_snake()
+        self.snake, self.direction = old_snake, old_dir
+
+        diff, _, color = self.difficulties[self.difficulty]
+        self.buttons[1].text = f"DIFICULDADE: {diff}"
+        for button in self.buttons:
+            button.draw(self.canvas, self.font_md)
+        hint = self.font_sm.render("ENTER para jogar  |  M para som  |  F11 tela cheia", True, MUTED)
+        self.canvas.blit(hint, hint.get_rect(center=(WIDTH // 2, 665)))
+
+    def draw_overlay(self, game_over=False):
+        shade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        shade.fill((3, 7, 15, 195))
+        self.canvas.blit(shade, (0, 0))
+        title = "FIM DE JOGO" if game_over else "PAUSADO"
+        color = PINK if game_over else CYAN
+        label = self.font_lg.render(title, True, color)
+        self.canvas.blit(label, label.get_rect(center=(PLAY_W // 2, 265)))
+        if game_over:
+            line = self.font_md.render(f"Pontuacao: {self.score}   |   Recorde: {self.record}", True, WHITE)
+            hint = self.font_sm.render("ENTER para tentar novamente  |  ESC para o menu", True, MUTED)
+        else:
+            line = self.font_md.render("Respira... a cobra esta esperando.", True, WHITE)
+            hint = self.font_sm.render("P ou ESC para continuar", True, MUTED)
+        self.canvas.blit(line, line.get_rect(center=(PLAY_W // 2, 335)))
+        self.canvas.blit(hint, hint.get_rect(center=(PLAY_W // 2, 390)))
+
+    def draw(self):
+        if self.state == "menu":
+            self.draw_menu()
+        else:
+            self.draw_background()
+            if self.special_food:
+                self.draw_food(self.special_food, True)
+            self.draw_food(self.food)
+            self.draw_snake()
+            for p in self.particles:
+                p.draw(self.canvas)
+            self.draw_hud()
+            if self.state == "paused":
+                self.draw_overlay(False)
+            elif self.state == "gameover":
+                self.draw_overlay(True)
+
+        sw, sh = self.screen.get_size()
+        scale = min(sw / WIDTH, sh / HEIGHT)
+        fitted = pygame.transform.smoothscale(self.canvas, (int(WIDTH * scale), int(HEIGHT * scale)))
+        self.screen.fill((2, 4, 9))
+        ox = (sw - fitted.get_width()) // 2
+        oy = (sh - fitted.get_height()) // 2
+        if self.shake:
+            ox += random.randint(-int(self.shake), int(self.shake))
+            oy += random.randint(-int(self.shake), int(self.shake))
+        self.screen.blit(fitted, (ox, oy))
+        pygame.display.flip()
+
+    def run(self):
+        while True:
+            dt = min(self.clock.tick(FPS) / 1000.0, 0.05)
+            for event in pygame.event.get():
+                self.handle_event(event)
+            self.update(dt)
+            self.draw()
+
+
+if __name__ == "__main__":
+    SnakeGame().run()
+
+
+########## src/games/Flappy Bird/README.md ##########
+# Flappy Bird: Skyward
+
+Jogo arcade original em Python/Pygame, com customização e progresso local.
+
+## Estrutura
+
+```text
+flappy_bird/
+├── main.py
+├── README.md
+├── requirements.txt
+├── requirements
+├── settings.py
+└── game/
+    ├── __init__.py
+    └── app.py
+```
+
+## Instalação
+
+```cmd
+pip install -r requirements.txt
+```
+
+## Execução
+
+```cmd
+python main.py
+```
+
+## Controles
+
+- Espaço, W ou seta para cima: voar
+- Setas ou WASD: navegar pelos menus
+- Enter ou Espaço: selecionar/comprar/equipar
+- Esc: voltar
+
+## Recursos
+
+- Loja de chapéus: boné, cartola, coroa e chapéu de mago
+- Efeitos: clássico, faíscas, arco-íris e estrelas
+- Moedas adquiridas ao passar por canos
+- Recorde, itens e moedas salvos em `savegame.json`
+- Cenário em camadas, partículas, animações e dificuldade progressiva
+- Tudo desenhado pelo próprio código, sem arquivos externos
+
+## Versão profissional ampliada
+
+- 8 chapéus, incluindo pirata, aurora e headset
+- 6 rastros, incluindo fogo e gelo
+- 5 cores de pássaro
+- Loja com três categorias e catálogo com rolagem
+- Canos móveis após os primeiros pontos
+- Velocidade progressiva, abertura menor e geração mais rápida
+- Bônus de moeda a cada sequência de cinco canos
+- Indicador de nível e aviso de canos móveis
+
+
+########## src/games/Flappy Bird/main.py ##########
+"""Ponto de entrada do Flappy Bird."""
+from game import Game
+
+if __name__ == "__main__":
+    Game().run()
+
+
+########## src/games/Flappy Bird/requirements.txt ##########
+pygame>=2.5,<3.0
+
+
+########## src/games/Flappy Bird/savegame.json ##########
+{
+  "coins": 3,
+  "best": 3,
+  "hat": "none",
+  "effect": "classic",
+  "owned_hats": [
+    "none"
+  ],
+  "owned_effects": [
+    "classic"
+  ],
+  "skin": "gold",
+  "owned_skins": [
+    "gold"
+  ]
+}
+
+########## src/games/Flappy Bird/settings.py ##########
+"""Configurações centrais do jogo."""
+WIDTH, HEIGHT = 480, 720
+FPS = 60
+TITLE = "Flappy Bird: Skyward"
+GRAVITY = 1540
+FLAP_FORCE = -475
+PIPE_SPEED = 205
+PIPE_GAP = 160
+SAVE_FILE = "savegame.json"
+
+
+########## src/games/Flappy Bird/game/__init__.py ##########
+from .app import Game
+
+__all__ = ["Game"]
+
+
+########## src/games/Flappy Bird/game/app.py ##########
+import json
+import math
+import random
+from pathlib import Path
+
+import pygame
+
+from settings import WIDTH, HEIGHT, FPS, TITLE, GRAVITY, FLAP_FORCE, PIPE_SPEED, PIPE_GAP, SAVE_FILE
+
+pygame.mixer.pre_init(44100, -16, 2, 512)
+pygame.init()
+Vec=pygame.Vector2
+WHITE=(250,252,255); INK=(20,36,58); SKY=(69,190,242); BLUE=(35,126,222)
+CYAN=(55,236,239); YELLOW=(255,213,55); ORANGE=(255,130,45); GREEN=(53,196,104)
+DARK_GREEN=(18,119,67); RED=(245,76,91); PINK=(255,100,176); PURPLE=(132,92,246)
+
+screen=pygame.display.set_mode((WIDTH,HEIGHT))
+pygame.display.set_caption(TITLE)
+clock=pygame.time.Clock()
+FONT_BIG=pygame.font.SysFont("arialblack",48)
+FONT_TITLE=pygame.font.SysFont("arialblack",30)
+FONT=pygame.font.SysFont("segoeui",21,bold=True)
+SMALL=pygame.font.SysFont("segoeui",15,bold=True)
+TINY=pygame.font.SysFont("consolas",12)
+
+
+def clamp(v,a,b): return max(a,min(b,v))
+
+def text(surf,value,font,color,pos,anchor="topleft",shadow=True):
+    img=font.render(str(value),True,color); rect=img.get_rect(); setattr(rect,anchor,pos)
+    if shadow:
+        sh=font.render(str(value),True,(9,25,40)); sr=sh.get_rect(); setattr(sr,anchor,(pos[0]+2,pos[1]+3)); surf.blit(sh,sr)
+    surf.blit(img,rect); return rect
+
+def panel(surf,rect,fill=(255,255,255,220),border=(255,255,255,245),radius=18):
+    layer=pygame.Surface(rect.size,pygame.SRCALPHA)
+    pygame.draw.rect(layer,fill,layer.get_rect(),border_radius=radius)
+    pygame.draw.rect(layer,border,layer.get_rect(),2,border_radius=radius)
+    surf.blit(layer,rect.topleft)
+
+def glow(surf,color,pos,r):
+    layer=pygame.Surface((r*6,r*6),pygame.SRCALPHA); c=r*3
+    for i in range(4,0,-1): pygame.draw.circle(layer,(*color,10+i*6),(c,c),r+i*r//2)
+    surf.blit(layer,(pos[0]-c,pos[1]-c),special_flags=pygame.BLEND_ADD)
+
+class SaveData:
+    def __init__(self):
+        self.path=Path(SAVE_FILE)
+        self.data={"coins":0,"best":0,"hat":"none","effect":"classic","owned_hats":["none"],"owned_effects":["classic"],"skin":"gold","owned_skins":["gold"]}
+        try:
+            if self.path.exists(): self.data.update(json.loads(self.path.read_text(encoding="utf-8")))
+        except Exception: pass
+    def save(self):
+        try: self.path.write_text(json.dumps(self.data,indent=2),encoding="utf-8")
+        except Exception: pass
+
+class Particle:
+    def __init__(self,pos,vel,color,life,size,kind="circle"):
+        self.pos=Vec(pos); self.vel=Vec(vel); self.color=color; self.life=life; self.max=life; self.size=size; self.kind=kind
+    def update(self,dt):
+        self.life-=dt; self.pos+=self.vel*dt; self.vel.y+=80*dt; return self.life>0
+    def draw(self,surf):
+        a=clamp(self.life/self.max,0,1); s=max(1,int(self.size*a))
+        if self.kind=="star":
+            pts=[]
+            for i in range(10):
+                ang=-math.pi/2+i*math.pi/5; rad=s if i%2==0 else s*.45
+                pts.append((self.pos.x+math.cos(ang)*rad,self.pos.y+math.sin(ang)*rad))
+            pygame.draw.polygon(surf,self.color,pts)
+        else: pygame.draw.circle(surf,self.color,self.pos,s)
+
+class Cloud:
+    def __init__(self,x=None):
+        self.x=x if x is not None else random.randrange(WIDTH); self.y=random.randrange(70,470); self.speed=random.uniform(8,24); self.scale=random.uniform(.6,1.35)
+    def update(self,dt):
+        self.x-=self.speed*dt
+        if self.x<-110: self.x=WIDTH+80; self.y=random.randrange(60,440)
+    def draw(self,s):
+        x,y=self.x,self.y; k=self.scale; c=(255,255,255,145)
+        layer=pygame.Surface((130,65),pygame.SRCALPHA)
+        pygame.draw.ellipse(layer,c,(10,30,105,27)); pygame.draw.circle(layer,c,(42,31),23); pygame.draw.circle(layer,c,(73,24),29); pygame.draw.circle(layer,c,(99,34),19)
+        layer=pygame.transform.smoothscale(layer,(int(130*k),int(65*k))); s.blit(layer,(x,y))
+
+class Pipe:
+    def __init__(self,x,gap_y):
+        self.x=x; self.gap_y=gap_y; self.base_gap_y=gap_y; self.passed=False; self.w=82
+        self.phase=random.uniform(0,math.tau); self.age=0; self.motion=0
+    def update(self,dt,speed):
+        self.x-=speed*dt; self.age+=dt
+        if self.motion: self.gap_y=self.base_gap_y+math.sin(self.age*1.35+self.phase)*self.motion
+        return self.x>-self.w-20
+    def rects(self,gap):
+        return pygame.Rect(self.x,0,self.w,self.gap_y-gap/2),pygame.Rect(self.x,self.gap_y+gap/2,self.w,HEIGHT)
+    def draw_one(self,surf,rect,top):
+        body=pygame.Rect(rect)
+        pygame.draw.rect(surf,(24,145,73),body,border_radius=8)
+        pygame.draw.rect(surf,(72,220,116),(body.x+7,body.y,body.w-22,body.h),border_radius=7)
+        pygame.draw.rect(surf,(136,247,158),(body.x+12,body.y,12,body.h),border_radius=6)
+        pygame.draw.rect(surf,(10,90,48),body,4,border_radius=8)
+        for by in range(body.top+36,body.bottom-20,72):
+            pygame.draw.circle(surf,(190,255,205),(body.x+body.w-12,by),3); pygame.draw.circle(surf,(8,80,42),(body.x+body.w-12,by),3,1)
+        cap_y=body.bottom-30 if top else body.top
+        cap=pygame.Rect(body.x-8,cap_y,body.w+16,30)
+        pygame.draw.rect(surf,(27,160,80),cap,border_radius=7); pygame.draw.rect(surf,(85,230,126),(cap.x+8,cap.y+4,cap.w-25,cap.h-8),border_radius=5); pygame.draw.rect(surf,(9,83,44),cap,4,border_radius=7)
+    def draw(self,surf,gap):
+        a,b=self.rects(gap); self.draw_one(surf,a,True); self.draw_one(surf,b,False)
+
+class Bird:
+    def __init__(self,hat,effect,skin="gold"):
+        self.pos=Vec(140,HEIGHT*.43); self.vel=0; self.radius=18; self.angle=0; self.hat=hat; self.effect=effect; self.skin=skin; self.anim=0
+    def flap(self): self.vel=FLAP_FORCE
+    def update(self,dt):
+        self.anim+=dt; self.vel+=GRAVITY*dt; self.pos.y+=self.vel*dt; self.angle=clamp(-self.vel*.075-8,-72,26)
+    @property
+    def rect(self): return pygame.Rect(self.pos.x-13,self.pos.y-12,26,24)
+    def draw_hat(self,s,x,y):
+        if self.hat=="cap":
+            pygame.draw.arc(s,RED,(x-15,y-28,29,21),math.pi,math.pi*2,8); pygame.draw.rect(s,RED,(x-2,y-20,20,5),border_radius=2)
+        elif self.hat=="tophat":
+            pygame.draw.rect(s,(27,31,48),(x-11,y-34,22,21),border_radius=3); pygame.draw.rect(s,(27,31,48),(x-16,y-16,32,6),border_radius=2); pygame.draw.rect(s,PURPLE,(x-11,y-19,22,5))
+        elif self.hat=="crown":
+            pygame.draw.polygon(s,YELLOW,[(x-15,y-15),(x-13,y-34),(x-4,y-23),(x,y-37),(x+7,y-23),(x+15,y-34),(x+13,y-15)]); pygame.draw.rect(s,ORANGE,(x-15,y-18,30,6),border_radius=2)
+        elif self.hat=="wizard":
+            pygame.draw.polygon(s,PURPLE,[(x-16,y-14),(x+13,y-14),(x+2,y-43)]); pygame.draw.ellipse(s,PURPLE,(x-19,y-18,38,8)); pygame.draw.circle(s,YELLOW,(x+2,y-29),3)
+        elif self.hat=="pirate":
+            pygame.draw.arc(s,(25,28,39),(x-16,y-31,32,24),math.pi,math.pi*2,9); pygame.draw.circle(s,WHITE,(x,y-24),4); pygame.draw.line(s,WHITE,(x-6,y-18),(x+6,y-30),2)
+        elif self.hat=="halo":
+            pygame.draw.ellipse(s,YELLOW,(x-16,y-31,32,8),3); glow(s,YELLOW,(x,y-27),4)
+        elif self.hat=="headphones":
+            pygame.draw.arc(s,(35,45,65),(x-16,y-29,32,27),math.pi,math.pi*2,5); pygame.draw.rect(s,CYAN,(x-18,y-18,7,14),border_radius=3); pygame.draw.rect(s,CYAN,(x+11,y-18,7,14),border_radius=3)
+    def draw(self,surf):
+        bird=pygame.Surface((76,76),pygame.SRCALPHA); x=y=38
+        # wing behind body
+        wing_y=39+int(math.sin(self.anim*16)*5)
+        pygame.draw.ellipse(bird,(232,153,35),(12,wing_y-8,28,19)); pygame.draw.ellipse(bird,(123,73,23),(12,wing_y-8,28,19),2)
+        # body with outlines and highlight; cores customizaveis
+        palettes={"gold":((255,190,43),(255,224,98),(108,66,22)),"blue":((55,166,245),(120,220,255),(22,70,125)),"rose":((255,105,165),(255,180,210),(125,38,78)),"mint":((65,220,155),(150,255,205),(20,105,72)),"night":((55,58,88),(125,115,210),(16,18,38))}
+        body_col,light_col,outline=palettes.get(self.skin,palettes["gold"])
+        pygame.draw.ellipse(bird,body_col,(18,18,43,39)); pygame.draw.ellipse(bird,outline,(18,18,43,39),3)
+        pygame.draw.ellipse(bird,light_col,(22,21,21,13))
+        pygame.draw.ellipse(bird,WHITE,(39,20,19,20)); pygame.draw.ellipse(bird,INK,(48,25,7,9)); pygame.draw.circle(bird,WHITE,(50,26),2)
+        pygame.draw.polygon(bird,ORANGE,[(54,34),(72,40),(54,45)]); pygame.draw.lines(bird,(110,55,20),True,[(54,34),(72,40),(54,45)],2)
+        pygame.draw.ellipse(bird,(255,245,205),(29,43,25,10))
+        self.draw_hat(bird,x,y)
+        bird=pygame.transform.rotate(bird,self.angle)
+        surf.blit(bird,bird.get_rect(center=self.pos))
+
+class Game:
+    HATS=[("none","Sem chapéu",0),("cap","Boné",25),("tophat","Cartola",60),("crown","Coroa",120),("wizard","Mago",180),("pirate","Pirata",220),("halo","Aurora",260),("headphones","Headset",300)]
+    EFFECTS=[("classic","Clássico",0),("spark","Faíscas",50),("rainbow","Arco-íris",100),("stars","Estrelas",160),("fire","Fogo",220),("ice","Gelo",260)]
+    SKINS=[("gold","Dourado",0),("blue","Azul celeste",80),("rose","Rosa",100),("mint","Menta",130),("night","Noturno",200)]
+    def __init__(self):
+        self.save=SaveData(); self.state="menu"; self.menu_idx=0; self.shop_tab=0; self.shop_idx=0; self.streak=0
+        self.clouds=[Cloud() for _ in range(7)]; self.particles=[]; self.reset()
+    def reset(self):
+        self.bird=Bird(self.save.data["hat"],self.save.data["effect"],self.save.data.get("skin","gold")); self.pipes=[]; self.score=0; self.started=False; self.spawn=0; self.speed=PIPE_SPEED; self.gap=PIPE_GAP; self.flash=0
+    def emit(self,amount=7):
+        effect=self.bird.effect
+        colors=([RED,ORANGE,YELLOW] if effect=="fire" else ([WHITE,CYAN,BLUE] if effect=="ice" else ([YELLOW] if effect in ("classic","spark") else ([RED,ORANGE,YELLOW,GREEN,CYAN,PURPLE] if effect=="rainbow" else [WHITE,CYAN,PURPLE]))))
+        for i in range(amount):
+            self.particles.append(Particle(self.bird.pos+Vec(-16,random.uniform(-6,6)),Vec(random.uniform(-100,-45),random.uniform(-45,45)),colors[i%len(colors)],random.uniform(.35,.75),random.uniform(3,7),"star" if effect=="stars" else "circle"))
+    def flap(self):
+        if self.state=="play":
+            if not self.started: self.started=True
+            self.bird.flap(); self.emit(10 if self.bird.effect!="classic" else 5)
+    def background(self):
+        # rich vertical sky gradient
+        for y in range(HEIGHT):
+            t=y/HEIGHT; col=(int(58+65*t),int(178+40*t),int(239+10*t)); pygame.draw.line(screen,col,(0,y),(WIDTH,y))
+        glow(screen,(255,232,130),(390,105),55); pygame.draw.circle(screen,(255,239,157),(390,105),34)
+        for c in self.clouds: c.draw(screen)
+        # distant hills
+        pygame.draw.polygon(screen,(74,174,137),[(0,590),(60,520),(125,575),(195,505),(275,575),(350,520),(480,580),(480,720),(0,720)])
+        pygame.draw.polygon(screen,(55,151,113),[(0,626),(76,565),(153,622),(242,550),(337,620),(418,568),(480,615),(480,720),(0,720)])
+        pygame.draw.rect(screen,(209,181,91),(0,664,WIDTH,56)); pygame.draw.rect(screen,(112,204,95),(0,652,WIDTH,18)); pygame.draw.rect(screen,(47,135,71),(0,652,WIDTH,6))
+        for x in range(0,WIDTH,32): pygame.draw.ellipse(screen,(232,205,112),(x,684,24,8))
+    def update_common(self,dt):
+        for c in self.clouds: c.update(dt)
+        self.particles=[p for p in self.particles if p.update(dt)]
+    def update_play(self,dt):
+        self.update_common(dt); self.flash=max(0,self.flash-dt)
+        if not self.started: return
+        self.bird.update(dt); self.spawn-=dt
+        self.speed=PIPE_SPEED+min(125,self.score*3.0); self.gap=max(118,PIPE_GAP-self.score*.85)
+        if self.spawn<=0:
+            pipe=Pipe(WIDTH+40,random.randint(190,485)); pipe.motion=min(34,max(0,self.score-6)*2.5); self.pipes.append(pipe); self.spawn=max(1.16,1.43-self.score*.008)
+        self.pipes=[p for p in self.pipes if p.update(dt,self.speed)]
+        if self.bird.effect!="classic" and random.random()<.55: self.emit(1)
+        for p in self.pipes:
+            if not p.passed and p.x+p.w<self.bird.pos.x:
+                p.passed=True; self.score+=1; self.streak+=1; self.save.data["coins"]+=1+(1 if self.streak%5==0 else 0)
+                for _ in range(14): self.particles.append(Particle((self.bird.pos.x,self.bird.pos.y),Vec(random.uniform(-110,110),random.uniform(-130,20)),YELLOW,.65,6,"star"))
+            a,b=p.rects(self.gap)
+            if self.bird.rect.colliderect(a) or self.bird.rect.colliderect(b): self.streak=0; self.game_over()
+        if self.bird.pos.y>646 or self.bird.pos.y<-25: self.game_over()
+    def game_over(self):
+        self.save.data["best"]=max(self.save.data["best"],self.score); self.save.save(); self.state="over"; self.flash=.18
+    def draw_score(self):
+        text(screen,self.score,FONT_BIG,WHITE,(WIDTH//2,78),"center")
+    def draw_menu(self):
+        self.background(); t=pygame.time.get_ticks()/1000
+        self.bird.pos=Vec(WIDTH*.5,270+math.sin(t*2.3)*8); self.bird.anim=t; self.bird.angle=-4; self.bird.draw(screen)
+        text(screen,"FLAPPY",FONT_BIG,WHITE,(WIDTH//2,85),"center")
+        text(screen,"BIRD",FONT_BIG,YELLOW,(WIDTH//2,137),"center")
+        text(screen,"SKYWARD EDITION",SMALL,WHITE,(WIDTH//2,181),"center")
+        panel(screen,pygame.Rect(75,365,330,190),(10,35,58,205),(255,255,255,90))
+        items=("JOGAR","CUSTOMIZAR","SAIR")
+        for i,item in enumerate(items):
+            r=pygame.Rect(104,389+i*51,272,40)
+            if i==self.menu_idx: pygame.draw.rect(screen,(255,198,45),r,border_radius=12); pygame.draw.rect(screen,WHITE,r,2,border_radius=12)
+            text(screen,item,FONT,INK if i==self.menu_idx else WHITE,r.center,"center")
+        pygame.draw.circle(screen,YELLOW,(34,34),16); text(screen,self.save.data["coins"],SMALL,WHITE,(58,34),"midleft")
+        text(screen,f"RECORDE {self.save.data['best']}",SMALL,WHITE,(WIDTH-18,27),"topright")
+        text(screen,"ESPAÇO / ENTER",TINY,WHITE,(WIDTH//2,606),"center")
+    def draw_play(self):
+        self.background()
+        for p in self.pipes: p.draw(screen,self.gap)
+        for p in self.particles: p.draw(screen)
+        self.bird.draw(screen); self.draw_score()
+        level=1+self.score//10
+        text(screen,f"NÍVEL {level}",TINY,WHITE,(18,24))
+        if self.score>=6: text(screen,"CANOS MÓVEIS",TINY,YELLOW,(WIDTH-18,24),"topright")
+        if not self.started:
+            panel(screen,pygame.Rect(95,395,290,86),(7,34,55,185),(255,255,255,80))
+            text(screen,"ESPAÇO PARA VOAR",FONT,WHITE,(WIDTH//2,423),"center"); text(screen,"Passe pelos canos e ganhe moedas",TINY,WHITE,(WIDTH//2,458),"center")
+    def draw_over(self):
+        self.draw_play(); shade=pygame.Surface((WIDTH,HEIGHT),pygame.SRCALPHA); shade.fill((4,18,35,135)); screen.blit(shade,(0,0))
+        panel(screen,pygame.Rect(62,185,356,300),(248,252,255,240),(255,255,255,255))
+        text(screen,"FIM DE JOGO",FONT_TITLE,INK,(WIDTH//2,220),"center")
+        pygame.draw.circle(screen,YELLOW,(150,305),47); text(screen,self.score,FONT_TITLE,INK,(150,303),"center"); text(screen,"PONTOS",TINY,INK,(150,342),"center",False)
+        pygame.draw.circle(screen,CYAN,(330,305),47); text(screen,self.save.data["best"],FONT_TITLE,INK,(330,303),"center"); text(screen,"RECORDE",TINY,INK,(330,342),"center",False)
+        text(screen,f"+ {self.score} MOEDAS",SMALL,ORANGE,(WIDTH//2,382),"center")
+        pygame.draw.rect(screen,YELLOW,(111,416,258,44),border_radius=13); text(screen,"JOGAR NOVAMENTE",FONT,INK,(240,437),"center")
+        text(screen,"ESC para o menu",TINY,INK,(WIDTH//2,472),"center",False)
+    def current_shop(self): return self.HATS if self.shop_tab==0 else (self.EFFECTS if self.shop_tab==1 else self.SKINS)
+    def draw_shop_preview(self,item_id):
+        preview=Bird(item_id if self.shop_tab==0 else self.save.data["hat"],item_id if self.shop_tab==1 else self.save.data["effect"],item_id if self.shop_tab==2 else self.save.data.get("skin","gold"))
+        preview.pos=Vec(WIDTH//2,245); preview.anim=pygame.time.get_ticks()/1000; preview.draw(screen)
+        if self.shop_tab==1:
+            old=self.bird; self.bird=preview; self.emit(2); self.bird=old
+    def draw_shop(self):
+        self.background(); panel(screen,pygame.Rect(24,26,432,650),(8,30,52,225),(255,255,255,100))
+        text(screen,"CUSTOMIZAÇÃO",FONT_TITLE,WHITE,(WIDTH//2,59),"center")
+        tabs=("CHAPÉUS","EFEITOS","CORES")
+        for i,name in enumerate(tabs):
+            r=pygame.Rect(38+i*136,91,128,38); pygame.draw.rect(screen,YELLOW if i==self.shop_tab else (25,65,89),r,border_radius=10); text(screen,name,SMALL,INK if i==self.shop_tab else WHITE,r.center,"center")
+        items=self.current_shop(); item_id,name,price=items[self.shop_idx]; self.draw_shop_preview(item_id)
+        text(screen,name,FONT_TITLE,WHITE,(WIDTH//2,310),"center")
+        owned_key="owned_hats" if self.shop_tab==0 else ("owned_effects" if self.shop_tab==1 else "owned_skins")
+        select_key="hat" if self.shop_tab==0 else ("effect" if self.shop_tab==1 else "skin")
+        owned=item_id in self.save.data[owned_key]
+        selected=item_id==self.save.data[select_key]
+        status="EQUIPADO" if selected else ("EQUIPAR" if owned else f"COMPRAR  {price}")
+        pygame.draw.rect(screen,YELLOW,(100,349,280,46),border_radius=14); text(screen,status,FONT,INK,(240,372),"center")
+        start=max(0,min(self.shop_idx-2,len(items)-5))
+        for row,i in enumerate(range(start,min(len(items),start+5))):
+            _,label,cost=items[i]; y=426+row*40; active=i==self.shop_idx
+            if active: pygame.draw.rect(screen,(32,108,145),(58,y-5,364,34),border_radius=9)
+            text(screen,label,SMALL,WHITE,(78,y+4)); text(screen,"GRÁTIS" if cost==0 else cost,SMALL,YELLOW,(397,y+4),"topright")
+        pygame.draw.circle(screen,YELLOW,(50,650),14); text(screen,self.save.data["coins"],SMALL,WHITE,(72,650),"midleft"); text(screen,"ESC VOLTAR",TINY,WHITE,(WIDTH-44,650),"midright")
+    def buy_or_equip(self):
+        items=self.current_shop(); item_id,_,price=items[self.shop_idx]; owned_key="owned_hats" if self.shop_tab==0 else ("owned_effects" if self.shop_tab==1 else "owned_skins"); sel="hat" if self.shop_tab==0 else ("effect" if self.shop_tab==1 else "skin")
+        if item_id in self.save.data[owned_key]: self.save.data[sel]=item_id
+        elif self.save.data["coins"]>=price:
+            self.save.data["coins"]-=price; self.save.data[owned_key].append(item_id); self.save.data[sel]=item_id
+        self.save.save()
+    def event(self,e):
+        if e.type!=pygame.KEYDOWN: return
+        if self.state=="menu":
+            if e.key in (pygame.K_UP,pygame.K_w): self.menu_idx=(self.menu_idx-1)%3
+            elif e.key in (pygame.K_DOWN,pygame.K_s): self.menu_idx=(self.menu_idx+1)%3
+            elif e.key in (pygame.K_RETURN,pygame.K_SPACE):
+                if self.menu_idx==0: self.reset(); self.state="play"
+                elif self.menu_idx==1: self.state="shop"
+                else: pygame.quit(); raise SystemExit
+            elif e.key==pygame.K_ESCAPE: pygame.quit(); raise SystemExit
+        elif self.state=="play":
+            if e.key in (pygame.K_SPACE,pygame.K_UP,pygame.K_w): self.flap()
+            elif e.key==pygame.K_ESCAPE: self.state="menu"
+        elif self.state=="over":
+            if e.key in (pygame.K_SPACE,pygame.K_RETURN): self.reset(); self.state="play"
+            elif e.key==pygame.K_ESCAPE: self.state="menu"
+        elif self.state=="shop":
+            if e.key in (pygame.K_LEFT,pygame.K_a): self.shop_tab=(self.shop_tab-1)%3; self.shop_idx=0
+            elif e.key in (pygame.K_RIGHT,pygame.K_d): self.shop_tab=(self.shop_tab+1)%3; self.shop_idx=0
+            elif e.key in (pygame.K_UP,pygame.K_w): self.shop_idx=(self.shop_idx-1)%len(self.current_shop())
+            elif e.key in (pygame.K_DOWN,pygame.K_s): self.shop_idx=(self.shop_idx+1)%len(self.current_shop())
+            elif e.key in (pygame.K_RETURN,pygame.K_SPACE): self.buy_or_equip()
+            elif e.key==pygame.K_ESCAPE: self.bird=Bird(self.save.data["hat"],self.save.data["effect"],self.save.data.get("skin","gold")); self.state="menu"
+    def run(self):
+        while True:
+            dt=min(clock.tick(FPS)/1000,.033)
+            for e in pygame.event.get():
+                if e.type==pygame.QUIT: pygame.quit(); return
+                self.event(e)
+            if self.state=="play": self.update_play(dt); self.draw_play()
+            else:
+                self.update_common(dt)
+                if self.state=="menu": self.draw_menu()
+                elif self.state=="shop": self.draw_shop()
+                else: self.draw_over()
+            pygame.display.flip()
+
+
+########## src/games/Ping pong/README.md ##########
+# Ping Pong em Pygame
+
+Jogo de Ping Pong com dois modos:
+
+- Jogador contra CPU
+- Dois jogadores locais
+
+## Requisitos
+
+- Python 3.10 ou superior
+- Pygame
+
+## Instalação
+
+Abra o CMD dentro da pasta do projeto e execute:
+
+```cmd
+python -m pip install -r requirements.txt
+```
+
+Depois inicie o jogo:
+
+```cmd
+python main.py
+```
+
+## Controles
+
+### Menu
+
+- `1`: Jogador contra CPU
+- `2`: Dois jogadores
+- `ESC`: Sair
+
+### Durante a partida
+
+- Jogador 1: `W` e `S`
+- Jogador 2: setas `CIMA` e `BAIXO`
+- `P`: Pausar ou continuar
+- `R`: Reiniciar a partida
+- `ESC`: Voltar ao menu
+
+O primeiro a atingir 7 pontos vence.
+
+
+########## src/games/Ping pong/main.py ##########
+import pygame
+from game.game import Game
+from settings import FPS, SCREEN_HEIGHT, SCREEN_WIDTH, TITLE
+
+
+def main():
+    pygame.init()
+    pygame.display.set_caption(TITLE)
+    screen = pygame.display.set_mode((1280, 800), pygame.FULLSCREEN)
+    clock = pygame.time.Clock()
+
+    game = Game(screen)
+    running = True
+
+    while running:
+        dt = clock.tick(FPS) / 1000.0
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            else:
+                game.handle_event(event)
+
+        game.update(dt)
+        game.draw()
+        pygame.display.flip()
+
+    pygame.quit()
+
+
+if __name__ == '__main__':
+    main()
+
+
+########## src/games/Ping pong/requirements.txt ##########
+pygame>=2.5.2,<3.0
+
+
+########## src/games/Ping pong/settings.py ##########
+SCREEN_WIDTH = 1280
+SCREEN_HEIGHT = 720
+FPS = 120
+TITLE = 'Ping Pong em Pygame'
+
+BACKGROUND_COLOR = (10, 18, 32)
+FOREGROUND_COLOR = (236, 240, 241)
+ACCENT_COLOR = (0, 210, 255)
+SECONDARY_COLOR = (255, 90, 120)
+MUTED_COLOR = (100, 116, 139)
+
+PADDLE_WIDTH = 18
+PADDLE_HEIGHT = 120
+PADDLE_SPEED = 560
+PADDLE_MARGIN = 45
+
+BALL_SIZE = 20
+BALL_START_SPEED = 470
+BALL_MAX_SPEED = 900
+BALL_ACCELERATION = 1.055
+
+WINNING_SCORE = 7
+
+
+########## src/games/Ping pong/game/__init__.py ##########
+
+
+########## src/games/Ping pong/game/game.py ##########
+import pygame
+
+from game.entities.ball import Ball
+from game.entities.paddle import Paddle
+from game.ui.text import draw_text
+from settings import (
+    ACCENT_COLOR,
+    BACKGROUND_COLOR,
+    FOREGROUND_COLOR,
+    MUTED_COLOR,
+    PADDLE_MARGIN,
+    PADDLE_WIDTH,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
+    SECONDARY_COLOR,
+    WINNING_SCORE,
+)
+
+
+class Game:
+    MENU = 'menu'
+    PLAYING = 'playing'
+    GAME_OVER = 'game_over'
+
+    def __init__(self, screen):
+        self.screen = screen
+        paddle_y = SCREEN_HEIGHT // 2 - 60
+        self.left_paddle = Paddle(PADDLE_MARGIN, paddle_y, ACCENT_COLOR)
+        self.right_paddle = Paddle(
+            SCREEN_WIDTH - PADDLE_MARGIN - PADDLE_WIDTH,
+            paddle_y,
+            SECONDARY_COLOR,
+        )
+        self.ball = Ball()
+        self.state = self.MENU
+        self.mode = 'cpu'
+        self.paused = False
+        self.left_score = 0
+        self.right_score = 0
+        self.winner = ''
+
+    def handle_event(self, event):
+        if event.type != pygame.KEYDOWN:
+            return
+
+        if self.state == self.MENU:
+            if event.key == pygame.K_1:
+                self.start_match('cpu')
+            elif event.key == pygame.K_2:
+                self.start_match('versus')
+            elif event.key == pygame.K_ESCAPE:
+                pygame.event.post(pygame.event.Event(pygame.QUIT))
+            return
+
+        if event.key == pygame.K_ESCAPE:
+            self.state = self.MENU
+            self.paused = False
+        elif event.key == pygame.K_r:
+            self.start_match(self.mode)
+        elif event.key == pygame.K_p and self.state == self.PLAYING:
+            self.paused = not self.paused
+        elif event.key in (pygame.K_RETURN, pygame.K_SPACE) and self.state == self.GAME_OVER:
+            self.start_match(self.mode)
+
+    def start_match(self, mode):
+        self.mode = mode
+        self.left_score = 0
+        self.right_score = 0
+        self.left_paddle.center()
+        self.right_paddle.center()
+        self.ball.reset()
+        self.winner = ''
+        self.paused = False
+        self.state = self.PLAYING
+
+    def update(self, dt):
+        if self.state != self.PLAYING or self.paused:
+            return
+
+        keys = pygame.key.get_pressed()
+        left_direction = int(keys[pygame.K_s]) - int(keys[pygame.K_w])
+        self.left_paddle.move(left_direction, dt)
+
+        if self.mode == 'versus':
+            right_direction = int(keys[pygame.K_DOWN]) - int(keys[pygame.K_UP])
+            self.right_paddle.move(right_direction, dt)
+        else:
+            self._update_cpu(dt)
+
+        self.ball.update(dt)
+        self._handle_collisions()
+        self._handle_score()
+
+    def _update_cpu(self, dt):
+        dead_zone = 18
+        difference = self.ball.rect.centery - self.right_paddle.rect.centery
+        direction = 0
+        if difference > dead_zone:
+            direction = 1
+        elif difference < -dead_zone:
+            direction = -1
+
+        original_speed = self.right_paddle.speed
+        self.right_paddle.speed *= 0.78
+        self.right_paddle.move(direction, dt)
+        self.right_paddle.speed = original_speed
+
+    def _handle_collisions(self):
+        if self.ball.velocity.x < 0 and self.ball.rect.colliderect(self.left_paddle.rect):
+            self.ball.bounce_from_paddle(self.left_paddle, 1)
+        elif self.ball.velocity.x > 0 and self.ball.rect.colliderect(self.right_paddle.rect):
+            self.ball.bounce_from_paddle(self.right_paddle, -1)
+
+    def _handle_score(self):
+        if self.ball.rect.right < 0:
+            self.right_score += 1
+            self._after_point(-1)
+        elif self.ball.rect.left > SCREEN_WIDTH:
+            self.left_score += 1
+            self._after_point(1)
+
+    def _after_point(self, serve_direction):
+        if self.left_score >= WINNING_SCORE:
+            self.winner = 'Jogador 1 venceu!'
+            self.state = self.GAME_OVER
+        elif self.right_score >= WINNING_SCORE:
+            self.winner = 'CPU venceu!' if self.mode == 'cpu' else 'Jogador 2 venceu!'
+            self.state = self.GAME_OVER
+        else:
+            self.ball.reset(serve_direction)
+
+    def draw(self):
+        self.screen.fill(BACKGROUND_COLOR)
+        self._draw_court()
+
+        if self.state == self.MENU:
+            self._draw_menu()
+            return
+
+        self.left_paddle.draw(self.screen)
+        self.right_paddle.draw(self.screen)
+        self.ball.draw(self.screen)
+        self._draw_score()
+
+        if self.paused:
+            self._draw_overlay('PAUSADO', 'Pressione P para continuar')
+        elif self.state == self.GAME_OVER:
+            self._draw_overlay(self.winner, 'ENTER: jogar novamente  |  ESC: menu')
+
+    def _draw_court(self):
+        for y in range(12, SCREEN_HEIGHT, 34):
+            pygame.draw.rect(
+                self.screen,
+                (45, 60, 82),
+                (SCREEN_WIDTH // 2 - 2, y, 4, 18),
+                border_radius=2,
+            )
+        pygame.draw.rect(self.screen, (32, 46, 66), self.screen.get_rect(), 4)
+
+    def _draw_menu(self):
+        draw_text(self.screen, 'PING PONG', 76, FOREGROUND_COLOR, (SCREEN_WIDTH // 2, 150), True)
+        draw_text(self.screen, 'PYGAME', 26, ACCENT_COLOR, (SCREEN_WIDTH // 2, 210), True)
+        draw_text(self.screen, '1  Jogador vs CPU', 30, FOREGROUND_COLOR, (SCREEN_WIDTH // 2, 320))
+        draw_text(self.screen, '2  Dois jogadores', 30, FOREGROUND_COLOR, (SCREEN_WIDTH // 2, 370))
+        draw_text(self.screen, 'W/S  |  Setas  |  P pausa  |  R reinicia', 20, MUTED_COLOR, (SCREEN_WIDTH // 2, 475))
+        draw_text(self.screen, 'ESC para sair', 18, MUTED_COLOR, (SCREEN_WIDTH // 2, 520))
+
+    def _draw_score(self):
+        draw_text(self.screen, str(self.left_score), 64, ACCENT_COLOR, (SCREEN_WIDTH // 2 - 90, 65), True)
+        draw_text(self.screen, str(self.right_score), 64, SECONDARY_COLOR, (SCREEN_WIDTH // 2 + 90, 65), True)
+        mode_text = 'VS CPU' if self.mode == 'cpu' else '2 JOGADORES'
+        draw_text(self.screen, mode_text, 17, MUTED_COLOR, (SCREEN_WIDTH // 2, 115), True)
+
+    def _draw_overlay(self, title, subtitle):
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 175))
+        self.screen.blit(overlay, (0, 0))
+        draw_text(self.screen, title, 52, FOREGROUND_COLOR, (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 35), True)
+        draw_text(self.screen, subtitle, 22, ACCENT_COLOR, (SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 35))
+
+
+########## src/games/Ping pong/game/entities/__init__.py ##########
+
+
+########## src/games/Ping pong/game/entities/ball.py ##########
+import math
+import random
+
+import pygame
+
+from settings import (
+    BALL_ACCELERATION,
+    BALL_MAX_SPEED,
+    BALL_SIZE,
+    BALL_START_SPEED,
+    FOREGROUND_COLOR,
+    SCREEN_HEIGHT,
+    SCREEN_WIDTH,
+)
+
+
+class Ball:
+    def __init__(self):
+        self.rect = pygame.Rect(0, 0, BALL_SIZE, BALL_SIZE)
+        self.position = pygame.Vector2()
+        self.velocity = pygame.Vector2()
+        self.reset(random.choice((-1, 1)))
+
+    def reset(self, horizontal_direction=None):
+        direction = horizontal_direction or random.choice((-1, 1))
+        angle = math.radians(random.uniform(-35, 35))
+        self.position.update(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)
+        self.velocity.update(
+            math.cos(angle) * BALL_START_SPEED * direction,
+            math.sin(angle) * BALL_START_SPEED,
+        )
+        self._sync_rect()
+
+    def update(self, dt):
+        self.position += self.velocity * dt
+        self._sync_rect()
+
+        if self.rect.top <= 0 and self.velocity.y < 0:
+            self.rect.top = 0
+            self.position.y = self.rect.centery
+            self.velocity.y *= -1
+        elif self.rect.bottom >= SCREEN_HEIGHT and self.velocity.y > 0:
+            self.rect.bottom = SCREEN_HEIGHT
+            self.position.y = self.rect.centery
+            self.velocity.y *= -1
+
+    def bounce_from_paddle(self, paddle, direction):
+        offset = (self.rect.centery - paddle.rect.centery) / (paddle.rect.height / 2)
+        speed = min(self.velocity.length() * BALL_ACCELERATION, BALL_MAX_SPEED)
+        angle = math.radians(offset * 58)
+        self.velocity.x = math.cos(angle) * speed * direction
+        self.velocity.y = math.sin(angle) * speed
+
+        if direction > 0:
+            self.rect.left = paddle.rect.right
+        else:
+            self.rect.right = paddle.rect.left
+        self.position.update(self.rect.center)
+
+    def _sync_rect(self):
+        self.rect.center = (round(self.position.x), round(self.position.y))
+
+    def draw(self, screen):
+        pygame.draw.ellipse(screen, FOREGROUND_COLOR, self.rect)
+
+
+########## src/games/Ping pong/game/entities/paddle.py ##########
+import pygame
+
+from settings import PADDLE_HEIGHT, PADDLE_SPEED, PADDLE_WIDTH, SCREEN_HEIGHT
+
+
+class Paddle:
+    def __init__(self, x, y, color):
+        self.rect = pygame.Rect(x, y, PADDLE_WIDTH, PADDLE_HEIGHT)
+        self.color = color
+        self.speed = PADDLE_SPEED
+
+    def move(self, direction, dt):
+        self.rect.y += round(direction * self.speed * dt)
+        self.rect.clamp_ip(pygame.Rect(0, 0, 10000, SCREEN_HEIGHT))
+
+    def center(self):
+        self.rect.centery = SCREEN_HEIGHT // 2
+
+    def draw(self, screen):
+        pygame.draw.rect(screen, self.color, self.rect, border_radius=9)
+
+
+########## src/games/Ping pong/game/ui/__init__.py ##########
+
+
+########## src/games/Ping pong/game/ui/text.py ##########
+import pygame
+
+
+_font_cache = {}
+
+
+def get_font(size, bold=False):
+    key = (size, bold)
+    if key not in _font_cache:
+        _font_cache[key] = pygame.font.SysFont('segoeui', size, bold=bold)
+    return _font_cache[key]
+
+
+def draw_text(screen, text, size, color, center, bold=False):
+    surface = get_font(size, bold).render(text, True, color)
+    rect = surface.get_rect(center=center)
+    screen.blit(surface, rect)
+    return rect
+
+
+########## src/games/Sapo/main.py ##########
+import math
+import random
+import sys
+import pygame
+import sys
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
+from game.game import Game
+
+if __name__ == "__main__":
+    jogo = Game()
+    jogo.run()
+
+pygame.init()
+
+# ============================================================
+# SAPO AVENTUREIRO PIXEL
+# Jogo inteiro em um único arquivo, sem imagens externas.
+# ============================================================
+
+SCALE = 3
+VW, VH = 320, 240
+W, H = VW * SCALE, VH * SCALE
+TILE = 20
+FPS = 60
+
+window = pygame.display.set_mode((W, H), pygame.FULLSCREEN)
+pygame.display.set_caption("Sapo Aventureiro Pixel")
+canvas = pygame.Surface((VW, VH))
+clock = pygame.time.Clock()
+
+FONT = pygame.font.SysFont("consolas", 8, bold=True)
+SMALL = pygame.font.SysFont("consolas", 6, bold=True)
+BIG = pygame.font.SysFont("consolas", 16, bold=True)
+
+# Paleta pixel art
+INK = (18, 31, 30)
+WHITE = (248, 248, 224)
+CREAM = (250, 235, 162)
+GOLD = (255, 211, 63)
+RED = (218, 66, 68)
+
+GRASS_DARK = (40, 105, 57)
+GRASS = (56, 132, 67)
+GRASS_LIGHT = (86, 157, 73)
+FLOWER = (244, 147, 184)
+
+WATER_DARK = (19, 77, 119)
+WATER = (26, 105, 158)
+WATER_LIGHT = (66, 159, 194)
+WATER_FOAM = (157, 220, 226)
+
+SAND_DARK = (159, 143, 78)
+SAND = (203, 189, 109)
+SAND_LIGHT = (230, 216, 137)
+
+WOOD_DARK = (72, 42, 27)
+WOOD = (116, 69, 36)
+WOOD_LIGHT = (176, 107, 53)
+
+FROG_OUTLINE = (86, 144, 73)
+FROG_GREEN = (148, 193, 59)
+FROG_LIGHT = (170, 207, 72)
+FROG_BELLY = (224, 224, 25)
+FROG_EYE = (253, 253, 245)
+TONGUE = (239, 102, 129)
+
+GATOR_DARK = (34, 75, 42)
+GATOR = (56, 116, 58)
+GATOR_LIGHT = (78, 145, 68)
+
+LANES = {40, 60, 80, 120, 140, 160}
+SAFE_ROWS = {20, 100, 180, 200, 220}
+
+
+def text_center(text, font, y, color=WHITE):
+    image = font.render(text, False, color)
+    canvas.blit(image, (VW // 2 - image.get_width() // 2, y))
+
+
+def pixel_rect(surface, color, rect):
+    pygame.draw.rect(surface, color, pygame.Rect(*rect))
+
+
+class Particle:
+    def __init__(self, x, y, color):
+        angle = random.uniform(0, math.tau)
+        speed = random.uniform(10, 30)
+        self.x = float(x)
+        self.y = float(y)
+        self.vx = math.cos(angle) * speed
+        self.vy = math.sin(angle) * speed - 13
+        self.life = random.uniform(0.35, 0.75)
+        self.max_life = self.life
+        self.color = color
+        self.size = random.choice((1, 1, 2))
+
+    def update(self, dt):
+        self.life -= dt
+        self.x += self.vx * dt
+        self.y += self.vy * dt
+        self.vy += 32 * dt
+
+    def draw(self):
+        if self.life > 0:
+            pygame.draw.rect(canvas, self.color,
+                             (int(self.x), int(self.y), self.size, self.size))
+
+
+class Ripple:
+    def __init__(self, x, y, delay=0):
+        self.x = x
+        self.y = y
+        self.age = -delay
+        self.life = 0.75
+
+    def update(self, dt):
+        self.age += dt
+
+    def draw(self):
+        if 0 <= self.age <= self.life:
+            t = self.age / self.life
+            width = int(4 + 24 * t)
+            height = max(2, width // 4)
+            color = WATER_FOAM if t < 0.7 else WATER_LIGHT
+            pygame.draw.ellipse(canvas, color,
+                                (int(self.x - width / 2), int(self.y - height / 2),
+                                 width, height), 1)
+
+
+class Mover:
+    def __init__(self, x, y, width, speed, kind):
+        self.x = float(x)
+        self.y = y
+        self.width = width
+        self.speed = speed
+        self.kind = kind
+        self.rect = pygame.Rect(int(x), y + 4, width, 14)
+        self.anim = random.random() * 10
+
+    def update(self, dt):
+        self.anim += dt
+        self.x += self.speed * dt
+        if self.speed > 0 and self.x > VW + 28:
+            self.x = -self.width - 28
+        elif self.speed < 0 and self.x + self.width < -28:
+            self.x = VW + 28
+        self.rect.x = int(self.x)
+
+    def draw_log(self):
+        r = self.rect
+        # sombra na água
+        pixel_rect(canvas, WATER_DARK, (r.x + 2, r.y + 3, r.w, r.h - 1))
+        pixel_rect(canvas, WOOD_DARK, (r.x, r.y + 2, r.w, r.h - 4))
+        pixel_rect(canvas, WOOD, (r.x + 2, r.y, r.w - 4, r.h - 3))
+        pixel_rect(canvas, WOOD_LIGHT, (r.x + 5, r.y + 2, max(2, r.w - 12), 2))
+        # pontas quadradas pixeladas
+        pixel_rect(canvas, WOOD_DARK, (r.x, r.y + 4, 3, r.h - 8))
+        pixel_rect(canvas, WOOD_DARK, (r.right - 3, r.y + 4, 3, r.h - 8))
+        pixel_rect(canvas, WOOD_LIGHT, (r.right - 2, r.y + 5, 1, 4))
+        # casca
+        for xx in range(r.x + 10, r.right - 7, 14):
+            pixel_rect(canvas, WOOD_DARK, (xx, r.y + 4, 2, 6))
+            pixel_rect(canvas, WOOD_LIGHT, (xx + 2, r.y + 3, 3, 1))
+
+    def draw_gator(self):
+        r = self.rect
+        right = self.speed > 0
+        # sombra
+        pixel_rect(canvas, WATER_DARK, (r.x + 2, r.y + 4, r.w, 8))
+        # corpo pixelado
+        pixel_rect(canvas, GATOR_DARK, (r.x + 4, r.y + 3, r.w - 8, 9))
+        pixel_rect(canvas, GATOR, (r.x + 7, r.y + 1, r.w - 14, 9))
+        pixel_rect(canvas, GATOR_LIGHT, (r.x + 10, r.y + 2, max(2, r.w - 24), 2))
+        # cabeça e focinho
+        hx = r.right - 16 if right else r.x
+        pixel_rect(canvas, GATOR, (hx, r.y, 16, 11))
+        pixel_rect(canvas, GATOR_LIGHT, (hx + 2, r.y + 1, 11, 3))
+        # olho
+        ex = hx + 11 if right else hx + 4
+        pixel_rect(canvas, GOLD, (ex, r.y, 3, 3))
+        pixel_rect(canvas, INK, (ex + (1 if right else 0), r.y + 1, 1, 1))
+        # boca e dentes
+        pixel_rect(canvas, INK, (hx + 2, r.y + 7, 12, 1))
+        for tx in range(hx + 4, hx + 13, 4):
+            pixel_rect(canvas, WHITE, (tx, r.y + 8, 1, 2))
+        # placas nas costas
+        for xx in range(r.x + 12, r.right - 17, 8):
+            pygame.draw.polygon(canvas, GATOR_DARK,
+                                [(xx, r.y + 2), (xx + 3, r.y - 2), (xx + 6, r.y + 2)])
+        # cauda
+        if right:
+            pygame.draw.polygon(canvas, GATOR_DARK,
+                                [(r.x + 7, r.y + 3), (r.x - 5, r.y + 7), (r.x + 7, r.y + 10)])
+        else:
+            pygame.draw.polygon(canvas, GATOR_DARK,
+                                [(r.right - 7, r.y + 3), (r.right + 5, r.y + 7),
+                                 (r.right - 7, r.y + 10)])
+
+    def draw(self):
+        if self.kind == "log":
+            self.draw_log()
+        else:
+            self.draw_gator()
+
+
+class Frog:
+    def __init__(self):
+        self.lives = 3
+        self.score = 0
+        self.level = 1
+        self.total_time = 0
+        self.reset()
+
+    def reset(self):
+        self.x = VW // 2 - 9
+        self.y = 217
+        self.sx = self.tx = self.x
+        self.sy = self.ty = self.y
+        self.jump = 1.0
+        self.riding = None
+        self.invuln = 0.75
+        self.best_y = self.y
+        self.facing = "up"
+        self.sink = 0
+        self.blink = 0
+        self.blink_timer = random.uniform(1.5, 4.0)
+        self.second_blink = 0
+        self.mouth = 0
+        self.mouth_timer = random.uniform(2.5, 6.5)
+        self.look_timer = random.uniform(0.8, 2.5)
+        self.look_x = 0
+        self.look_y = 0
+
+    @property
+    def rect(self):
+        return pygame.Rect(int(self.x) + 4, int(self.y) + 5, 11, 11)
+
+    def request_jump(self, dx, dy):
+        if self.jump < 1:
+            return
+        self.sx, self.sy = self.x, self.y
+        self.tx = max(1, min(VW - 19, self.x + dx))
+        self.ty = max(1, min(VH - 20, self.y + dy))
+        self.jump = 0
+        self.riding = None
+        if dy < 0:
+            self.facing = "up"
+        elif dy > 0:
+            self.facing = "down"
+        elif dx < 0:
+            self.facing = "left"
+        elif dx > 0:
+            self.facing = "right"
+
+    def update(self, dt):
+        self.total_time += dt
+        self.invuln = max(0, self.invuln - dt)
+
+        # piscada aleatória, às vezes dupla
+        self.blink_timer -= dt
+        if self.blink_timer <= 0 and self.blink <= 0 and self.second_blink <= 0:
+            self.blink = 0.12
+            self.second_blink = 0.22 if random.random() < 0.28 else 0
+            self.blink_timer = random.uniform(1.8, 4.8)
+        if self.blink > 0:
+            self.blink -= dt
+        elif self.second_blink > 0:
+            self.second_blink -= dt
+            if self.second_blink <= 0.08:
+                self.blink = 0.11
+                self.second_blink = 0
+
+        # abre a boca de vez em quando
+        self.mouth_timer -= dt
+        if self.mouth_timer <= 0 and self.mouth <= 0:
+            self.mouth = random.uniform(0.3, 0.55)
+            self.mouth_timer = random.uniform(3.0, 7.0)
+        self.mouth = max(0, self.mouth - dt)
+
+        # olhos passeiam quando parado
+        self.look_timer -= dt
+        if self.look_timer <= 0:
+            self.look_x = random.choice((-1, 0, 0, 0, 1))
+            self.look_y = random.choice((-1, 0, 0, 1))
+            self.look_timer = random.uniform(0.8, 2.8)
+
+        if self.jump < 1:
+            self.jump = min(1, self.jump + dt * 6.2)
+            t = self.jump
+            smooth = t * t * (3 - 2 * t)
+            self.x = self.sx + (self.tx - self.sx) * smooth
+            self.y = self.sy + (self.ty - self.sy) * smooth
+            if self.jump >= 1 and self.y < self.best_y:
+                self.score += 10
+                self.best_y = self.y
+        elif self.riding:
+            self.x += self.riding.speed * dt
+            self.sx = self.tx = self.x
+
+    def build_sprite(self, alpha=255):
+        """Sapo compacto, simetrico e inspirado no sprite de referencia."""
+        s = pygame.Surface((26, 23), pygame.SRCALPHA)
+        A = alpha
+
+        # Pes largos com contorno definido
+        pixel_rect(s, (*FROG_OUTLINE, A), (1, 18, 10, 4))
+        pixel_rect(s, (*FROG_OUTLINE, A), (15, 18, 10, 4))
+        pixel_rect(s, (*FROG_GREEN, A), (2, 18, 8, 3))
+        pixel_rect(s, (*FROG_GREEN, A), (16, 18, 8, 3))
+        pixel_rect(s, (*FROG_LIGHT, A), (3, 18, 5, 1))
+        pixel_rect(s, (*FROG_LIGHT, A), (18, 18, 5, 1))
+
+        # Coxas arredondadas em degraus de pixel
+        pixel_rect(s, (*FROG_OUTLINE, A), (0, 13, 6, 7))
+        pixel_rect(s, (*FROG_OUTLINE, A), (20, 13, 6, 7))
+        pixel_rect(s, (*FROG_GREEN, A), (1, 13, 5, 6))
+        pixel_rect(s, (*FROG_GREEN, A), (20, 13, 5, 6))
+        pixel_rect(s, (*FROG_LIGHT, A), (2, 14, 3, 2))
+        pixel_rect(s, (*FROG_LIGHT, A), (21, 14, 3, 2))
+
+        # Corpo principal com silhueta menos quadrada
+        pixel_rect(s, (*FROG_OUTLINE, A), (4, 5, 18, 15))
+        pixel_rect(s, (*FROG_OUTLINE, A), (3, 8, 20, 8))
+        pixel_rect(s, (*FROG_GREEN, A), (4, 7, 18, 11))
+        pixel_rect(s, (*FROG_GREEN, A), (5, 5, 16, 14))
+        pixel_rect(s, (*FROG_LIGHT, A), (6, 6, 14, 3))
+
+        # Barriga amarela igual ao destaque da referencia
+        pixel_rect(s, (*FROG_BELLY, A), (6, 11, 14, 8))
+        pixel_rect(s, (*FROG_BELLY, A), (5, 12, 16, 4))
+        pixel_rect(s, (235, 229, 45, A), (7, 12, 11, 1))
+
+        # Bracos curtos junto ao corpo
+        pixel_rect(s, (*FROG_OUTLINE, A), (2, 9, 4, 7))
+        pixel_rect(s, (*FROG_OUTLINE, A), (20, 9, 4, 7))
+        pixel_rect(s, (*FROG_GREEN, A), (2, 10, 3, 5))
+        pixel_rect(s, (*FROG_GREEN, A), (21, 10, 3, 5))
+
+        # Olhos altos e bem separados
+        pixel_rect(s, (*FROG_OUTLINE, A), (4, 1, 8, 8))
+        pixel_rect(s, (*FROG_OUTLINE, A), (14, 1, 8, 8))
+        pixel_rect(s, (*FROG_GREEN, A), (6, 0, 4, 2))
+        pixel_rect(s, (*FROG_GREEN, A), (16, 0, 4, 2))
+
+        if self.blink > 0:
+            pixel_rect(s, (*FROG_EYE, A), (5, 4, 6, 2))
+            pixel_rect(s, (*FROG_EYE, A), (15, 4, 6, 2))
+            pixel_rect(s, (*INK, A), (6, 5, 4, 1))
+            pixel_rect(s, (*INK, A), (16, 5, 4, 1))
+        else:
+            pixel_rect(s, (*FROG_EYE, A), (5, 2, 6, 6))
+            pixel_rect(s, (*FROG_EYE, A), (15, 2, 6, 6))
+            lx, ly = self.look_x, self.look_y
+            if self.facing == "left":
+                lx = -1
+            elif self.facing == "right":
+                lx = 1
+            elif self.facing == "up":
+                ly = -1
+            elif self.facing == "down":
+                ly = 1
+            pixel_rect(s, (*INK, A), (7 + lx, 3 + ly, 3, 4))
+            pixel_rect(s, (*INK, A), (16 + lx, 3 + ly, 3, 4))
+            pixel_rect(s, (*FROG_EYE, A), (7 + lx, 3 + ly, 1, 1))
+            pixel_rect(s, (*FROG_EYE, A), (16 + lx, 3 + ly, 1, 1))
+
+        # Narinas discretas
+        pixel_rect(s, (*FROG_OUTLINE, A), (10, 9, 1, 1))
+        pixel_rect(s, (*FROG_OUTLINE, A), (15, 9, 1, 1))
+
+        # Sorriso largo da referencia e boca animada
+        if self.mouth > 0:
+            pixel_rect(s, (*INK, A), (6, 11, 14, 5))
+            pixel_rect(s, (*INK, A), (5, 10, 2, 3))
+            pixel_rect(s, (*INK, A), (19, 10, 2, 3))
+            pixel_rect(s, (*TONGUE, A), (9, 14, 8, 2))
+            pixel_rect(s, (255, 155, 171, A), (11, 14, 4, 1))
+        else:
+            pixel_rect(s, (*INK, A), (7, 13, 12, 2))
+            pixel_rect(s, (*INK, A), (5, 11, 2, 4))
+            pixel_rect(s, (*INK, A), (19, 11, 2, 4))
+
+        return s
+
+    def draw(self, alpha=255, sink=0):
+        if self.invuln > 0 and int(self.invuln * 22) % 2:
+            return
+
+        lift = int(math.sin(self.jump * math.pi) * 5) if self.jump < 1 else 0
+        breathe = 1 if self.jump >= 1 and math.sin(self.total_time * 3.2) > 0.8 else 0
+        sprite = self.build_sprite(alpha)
+
+        # Alongamento sutil, sem deformar demais o rosto
+        if self.jump < 1:
+            arc = math.sin(self.jump * math.pi)
+            sprite = pygame.transform.scale(sprite, (max(23, int(26 - arc)), int(23 + arc)))
+
+        angle = 0
+        if self.jump < 1 and self.facing == "left":
+            angle = 4
+        elif self.jump < 1 and self.facing == "right":
+            angle = -4
+        if angle:
+            sprite = pygame.transform.rotate(sprite, angle)
+
+        shadow_w = max(7, 13 - lift)
+        pygame.draw.ellipse(canvas, (15, 48, 50),
+                            (int(self.x + 9 - shadow_w / 2), int(self.y + 17), shadow_w, 2))
+
+        draw_x = int(self.x + 9 - sprite.get_width() / 2)
+        draw_y = int(self.y + 9 - sprite.get_height() / 2 - lift + sink + breathe)
+        canvas.blit(sprite, (draw_x, draw_y))
+
+def make_level(level):
+    multiplier = min(1 + (level - 1) * 0.12, 1.65)
+    specs = [
+        (40, 27, [("log", -20, 70), ("gator", 88, 45), ("log", 170, 82), ("log", 300, 62)]),
+        (60, -33, [("log", 5, 60), ("gator", 95, 48), ("log", 170, 72), ("gator", 272, 46), ("log", 340, 66)]),
+        (80, 38, [("gator", -35, 46), ("log", 35, 86), ("log", 170, 63), ("gator", 263, 46), ("log", 337, 76)]),
+        (120, -29, [("log", -50, 82), ("gator", 65, 46), ("log", 137, 80), ("log", 260, 70), ("gator", 357, 46)]),
+        (140, 35, [("log", -35, 64), ("gator", 60, 47), ("log", 138, 84), ("gator", 260, 47), ("log", 337, 73)]),
+        (160, -40, [("gator", -28, 47), ("log", 50, 80), ("log", 177, 66), ("gator", 273, 47), ("log", 347, 78)]),
+    ]
+    return [Mover(x, y, width, speed * multiplier, kind)
+            for y, speed, items in specs for kind, x, width in items]
+
+
+frog = Frog()
+movers = make_level(1)
+particles = []
+ripples = []
+state = "title"
+death_reason = ""
+death_timer = 0
+message = ""
+message_timer = 0
+water_time = 0
+shake = 0
+
+
+def is_water(y):
+    return any(row <= y < row + TILE for row in LANES)
+
+
+def splash(x, y, amount=18):
+    for _ in range(amount):
+        particles.append(Particle(x, y, random.choice((WATER_FOAM, WATER_LIGHT, WHITE))))
+    ripples.extend((Ripple(x, y), Ripple(x, y, 0.18), Ripple(x, y, 0.36)))
+
+
+def begin_death(reason):
+    global state, death_reason, death_timer, shake
+    if frog.invuln > 0 or state != "playing":
+        return
+    state = "dying"
+    death_reason = reason
+    death_timer = 1.05
+    shake = 0.28
+    splash(frog.rect.centerx, frog.rect.centery)
+
+
+def finish_death():
+    global state, message, message_timer
+    frog.lives -= 1
+    if frog.lives <= 0:
+        state = "gameover"
+    else:
+        frog.reset()
+        state = "playing"
+        message = death_reason
+        message_timer = 1.1
+
+
+def draw_map():
+    global water_time
+    water_time += 1 / FPS
+
+    for y in range(0, VH, TILE):
+        if y in LANES:
+            pixel_rect(canvas, WATER, (0, y, VW, TILE))
+            pixel_rect(canvas, WATER_DARK, (0, y, VW, 2))
+            # ondas quadradas deslocando
+            wave = int(water_time * 18 + y) % 30
+            for x in range(-30, VW + 30, 30):
+                xx = x + wave
+                pixel_rect(canvas, WATER_LIGHT, (xx, y + 6, 10, 1))
+                pixel_rect(canvas, WATER_LIGHT, (xx + 3, y + 5, 6, 1))
+                pixel_rect(canvas, WATER_DARK, (xx + 15, y + 14, 8, 1))
+        elif y == 100:
+            pixel_rect(canvas, SAND, (0, y, VW, TILE))
+            pixel_rect(canvas, SAND_LIGHT, (0, y, VW, 2))
+            for x in range(5, VW, 23):
+                pixel_rect(canvas, SAND_DARK, (x, y + 8 + (x % 7), 2, 1))
+        else:
+            base = GRASS if y % 40 else GRASS_DARK
+            pixel_rect(canvas, base, (0, y, VW, TILE))
+            pixel_rect(canvas, GRASS_DARK, (0, y, VW, 2))
+            for x in range(4, VW, 19):
+                yy = y + 5 + ((x * 3 + y) % 11)
+                pixel_rect(canvas, GRASS_LIGHT, (x, yy, 1, 4))
+                pixel_rect(canvas, GRASS_LIGHT, (x + 1, yy, 1, 2))
+
+    # vitória: folhas e flores
+    for x in (35, 96, 158, 221, 283):
+        pixel_rect(canvas, GRASS_DARK, (x - 8, 6, 16, 7))
+        pixel_rect(canvas, GRASS, (x - 10, 9, 20, 5))
+        pixel_rect(canvas, FLOWER, (x - 1, 4, 3, 3))
+        pixel_rect(canvas, GOLD, (x, 5, 1, 1))
+
+
+def draw_ui():
+    pixel_rect(canvas, INK, (0, 0, VW, 15))
+    pixel_rect(canvas, GRASS_LIGHT, (0, 14, VW, 1))
+    canvas.blit(FONT.render(f"VIDAS {frog.lives}", False, WHITE), (5, 4))
+    canvas.blit(FONT.render(f"PONTOS {frog.score}", False, GOLD), (75, 4))
+    level_text = FONT.render(f"NIVEL {frog.level}", False, WHITE)
+    canvas.blit(level_text, (VW - level_text.get_width() - 5, 4))
+
+
+def draw_overlay(color):
+    overlay = pygame.Surface((VW, VH), pygame.SRCALPHA)
+    overlay.fill(color)
+    canvas.blit(overlay, (0, 0))
+
+
+while True:
+    dt = min(clock.tick(FPS) / 1000.0, 0.033)
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            pygame.quit()
+            sys.exit()
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                pygame.quit()
+                sys.exit()
+            if state == "title" and event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                state = "playing"
+            elif state in ("gameover", "win") and event.key == pygame.K_r:
+                frog = Frog()
+                movers = make_level(1)
+                particles.clear()
+                ripples.clear()
+                state = "playing"
+            elif state == "playing":
+                if event.key in (pygame.K_UP, pygame.K_w):
+                    frog.request_jump(0, -TILE)
+                elif event.key in (pygame.K_DOWN, pygame.K_s):
+                    frog.request_jump(0, TILE)
+                elif event.key in (pygame.K_LEFT, pygame.K_a):
+                    frog.request_jump(-TILE, 0)
+                elif event.key in (pygame.K_RIGHT, pygame.K_d):
+                    frog.request_jump(TILE, 0)
+
+    if state in ("playing", "dying"):
+        for mover in movers:
+            mover.update(dt)
+
+    if state == "playing":
+        frog.update(dt)
+        frog.riding = None
+
+        if frog.jump >= 1 and is_water(frog.rect.centery):
+            hits = [m for m in movers if frog.rect.colliderect(m.rect)]
+            gators = [m for m in hits if m.kind == "gator"]
+            logs = [m for m in hits if m.kind == "log"]
+            if gators:
+                begin_death("O JACARE PEGOU O SAPO!")
+            elif logs:
+                frog.riding = max(logs, key=lambda m: frog.rect.clip(m.rect).width)
+            else:
+                begin_death("O SAPO CAIU NA AGUA!")
+
+        if frog.x < -18 or frog.x > VW + 5:
+            begin_death("A CORRENTEZA LEVOU O SAPO!")
+
+        if frog.y < 19:
+            frog.score += 250
+            frog.level += 1
+            if frog.level > 5:
+                state = "win"
+            else:
+                frog.reset()
+                movers = make_level(frog.level)
+                message = f"NIVEL {frog.level}: MAIS RAPIDO!"
+                message_timer = 1.5
+
+    elif state == "dying":
+        death_timer -= dt
+        frog.sink = min(9, frog.sink + dt * 12)
+        if death_timer <= 0:
+            finish_death()
+
+    message_timer = max(0, message_timer - dt)
+    shake = max(0, shake - dt)
+
+    for particle in particles[:]:
+        particle.update(dt)
+        if particle.life <= 0:
+            particles.remove(particle)
+    for ripple in ripples[:]:
+        ripple.update(dt)
+        if ripple.age > ripple.life:
+            ripples.remove(ripple)
+
+    draw_map()
+    for mover in movers:
+        mover.draw()
+    for ripple in ripples:
+        ripple.draw()
+
+    if state == "dying":
+        frog.draw(alpha=max(0, int(255 * death_timer / 1.05)), sink=frog.sink)
+    else:
+        frog.draw()
+
+    for particle in particles:
+        particle.draw()
+
+    draw_ui()
+
+    if state == "title":
+        draw_overlay((6, 20, 24, 218))
+        # sapo grande na tela inicial usando o mesmo desenho do personagem
+        old_blink, old_mouth = frog.blink, frog.mouth
+        frog.blink = 0
+        frog.mouth = 0
+        hero = frog.build_sprite()
+        hero = pygame.transform.scale(hero, (78, 69))
+        canvas.blit(hero, (VW // 2 - 39, 43))
+        frog.blink, frog.mouth = old_blink, old_mouth
+        text_center("SAPO AVENTUREIRO", BIG, 122, FROG_BELLY)
+        text_center("TRAVESSIA PIXEL", FONT, 148, FROG_LIGHT)
+        text_center("TRONCOS SAO SEGUROS", SMALL, 169, WHITE)
+        text_center("JACARES NAO SAO", SMALL, 179, RED)
+        text_center("[ ENTER ] JOGAR", FONT, 199, GOLD)
+        text_center("WASD OU SETAS", SMALL, 216, WHITE)
+
+    elif state == "gameover":
+        draw_overlay((35, 5, 8, 220))
+        text_center("FIM DE JOGO", BIG, 77, RED)
+        text_center(f"PONTUACAO: {frog.score}", FONT, 112, WHITE)
+        text_center("PRESSIONE R", FONT, 137, GOLD)
+        text_center("PARA RECOMECAR", SMALL, 152, WHITE)
+
+    elif state == "win":
+        draw_overlay((4, 30, 20, 212))
+        text_center("TRAVESSIA", BIG, 68, FROG_LIGHT)
+        text_center("CONCLUIDA!", BIG, 88, FROG_BELLY)
+        text_center(f"PONTUACAO: {frog.score}", FONT, 124, GOLD)
+        text_center("PRESSIONE R PARA JOGAR", SMALL, 153, WHITE)
+
+    elif message_timer > 0:
+        pixel_rect(canvas, INK, (54, 25, 212, 18))
+        pixel_rect(canvas, GOLD, (54, 25, 212, 1))
+        text_center(message, FONT, 31, GOLD)
+
+    # Escala inteira, preservando os pixels nítidos
+    scaled = pygame.transform.scale(canvas, (W, H))
+    if shake > 0:
+        offset_x = random.randint(-5, 5)
+        offset_y = random.randint(-5, 5)
+        window.fill(INK)
+        window.blit(scaled, (offset_x, offset_y))
+    else:
+        window.blit(scaled, (0, 0))
+
+    pygame.display.flip()
+
+
+########## src/games/Sapo/settings.py ##########
+import pygame
+
+SCALE = 3
+VW, VH = 320, 240
+W, H = VW * SCALE, VH * SCALE
+TILE = 20
+FPS = 60
+
+# Paleta pixel art
+INK = (18, 31, 30)
+WHITE = (248, 248, 224)
+CREAM = (250, 235, 162)
+GOLD = (255, 211, 63)
+RED = (218, 66, 68)
+
+GRASS_DARK, GRASS, GRASS_LIGHT = (40, 105, 57), (56, 132, 67), (86, 157, 73)
+FLOWER = (244, 147, 184)
+
+WATER_DARK, WATER, WATER_LIGHT, WATER_FOAM = (19, 77, 119), (26, 105, 158), (66, 159, 194), (157, 220, 226)
+SAND_DARK, SAND, SAND_LIGHT = (159, 143, 78), (203, 189, 109), (230, 216, 137)
+WOOD_DARK, WOOD, WOOD_LIGHT = (72, 42, 27), (116, 69, 36), (176, 107, 53)
+
+FROG_OUTLINE, FROG_GREEN, FROG_LIGHT = (86, 144, 73), (148, 193, 59), (170, 207, 72)
+FROG_BELLY, FROG_EYE, TONGUE = (224, 224, 25), (253, 253, 245), (239, 102, 129)
+
+GATOR_DARK, GATOR, GATOR_LIGHT = (34, 75, 42), (56, 116, 58), (78, 145, 68)
+
+LANES = {40, 60, 80, 120, 140, 160}
+SAFE_ROWS = {20, 100, 180, 200, 220}
+
+def pixel_rect(surface, color, rect):
+    pygame.draw.rect(surface, color, pygame.Rect(*rect))
+
+########## src/games/Sapo/game/game.py ##########
+import sys
+import pygame
+import random
+from settings import *
+from game.entities.frog import Frog
+from game.entities.mover import Mover
+from game.entities.fx import Particle, Ripple
+
+class Game:
+    def __init__(self):
+        pygame.init()
+        self.window = pygame.display.set_mode((W, H))
+        pygame.display.set_caption("Sapo Aventureiro Pixel")
+        self.canvas = pygame.Surface((VW, VH))
+        self.clock = pygame.time.Clock()
+        
+        self.FONT = pygame.font.SysFont("consolas", 8, bold=True)
+        self.SMALL = pygame.font.SysFont("consolas", 6, bold=True)
+        self.BIG = pygame.font.SysFont("consolas", 16, bold=True)
+
+        self.frog = Frog()
+        self.movers = self.make_level(1)
+        self.particles = []
+        self.ripples = []
+        
+        self.state = "title"
+        self.death_reason = ""
+        self.death_timer = 0
+        self.message = ""
+        self.message_timer = 0
+        self.water_time = 0
+        self.shake = 0
+
+    def make_level(self, level):
+        multiplier = min(1 + (level - 1) * 0.12, 1.65)
+        specs = [
+            (40, 27, [("log", -20, 70), ("gator", 88, 45), ("log", 170, 82), ("log", 300, 62)]),
+            (60, -33, [("log", 5, 60), ("gator", 95, 48), ("log", 170, 72), ("gator", 272, 46), ("log", 340, 66)]),
+            (80, 38, [("gator", -35, 46), ("log", 35, 86), ("log", 170, 63), ("gator", 263, 46), ("log", 337, 76)]),
+            (120, -29, [("log", -50, 82), ("gator", 65, 46), ("log", 137, 80), ("log", 260, 70), ("gator", 357, 46)]),
+            (140, 35, [("log", -35, 64), ("gator", 60, 47), ("log", 138, 84), ("gator", 260, 47), ("log", 337, 73)]),
+            (160, -40, [("gator", -28, 47), ("log", 50, 80), ("log", 177, 66), ("gator", 273, 47), ("log", 347, 78)]),
+        ]
+        return [Mover(x, y, width, speed * multiplier, kind) for y, speed, items in specs for kind, x, width in items]
+
+    def is_water(self, y):
+        return any(row <= y < row + TILE for row in LANES)
+
+    def splash(self, x, y, amount=18):
+        for _ in range(amount):
+            self.particles.append(Particle(x, y, random.choice((WATER_FOAM, WATER_LIGHT, WHITE))))
+        self.ripples.extend((Ripple(x, y), Ripple(x, y, 0.18), Ripple(x, y, 0.36)))
+
+    def begin_death(self, reason):
+        if self.frog.invuln > 0 or self.state != "playing": return
+        self.state = "dying"
+        self.death_reason = reason
+        self.death_timer = 1.05
+        self.shake = 0.28
+        self.splash(self.frog.rect.centerx, self.frog.rect.centery)
+
+    def finish_death(self):
+        self.frog.lives -= 1
+        if self.frog.lives <= 0:
+            self.state = "gameover"
+        else:
+            self.frog.reset()
+            self.state = "playing"
+            self.message = self.death_reason
+            self.message_timer = 1.1
+
+    def text_center(self, text, font, y, color=WHITE):
+        image = font.render(text, False, color)
+        self.canvas.blit(image, (VW // 2 - image.get_width() // 2, y))
+
+    def draw_map(self):
+        self.water_time += 1 / FPS
+        for y in range(0, VH, TILE):
+            if y in LANES:
+                pixel_rect(self.canvas, WATER, (0, y, VW, TILE))
+                pixel_rect(self.canvas, WATER_DARK, (0, y, VW, 2))
+                wave = int(self.water_time * 18 + y) % 30
+                for x in range(-30, VW + 30, 30):
+                    xx = x + wave
+                    pixel_rect(self.canvas, WATER_LIGHT, (xx, y + 6, 10, 1))
+                    pixel_rect(self.canvas, WATER_LIGHT, (xx + 3, y + 5, 6, 1))
+                    pixel_rect(self.canvas, WATER_DARK, (xx + 15, y + 14, 8, 1))
+            elif y == 100:
+                pixel_rect(self.canvas, SAND, (0, y, VW, TILE))
+                pixel_rect(self.canvas, SAND_LIGHT, (0, y, VW, 2))
+                for x in range(5, VW, 23):
+                    pixel_rect(self.canvas, SAND_DARK, (x, y + 8 + (x % 7), 2, 1))
+            else:
+                base = GRASS if y % 40 else GRASS_DARK
+                pixel_rect(self.canvas, base, (0, y, VW, TILE))
+                pixel_rect(self.canvas, GRASS_DARK, (0, y, VW, 2))
+                for x in range(4, VW, 19):
+                    yy = y + 5 + ((x * 3 + y) % 11)
+                    pixel_rect(self.canvas, GRASS_LIGHT, (x, yy, 1, 4))
+                    pixel_rect(self.canvas, GRASS_LIGHT, (x + 1, yy, 1, 2))
+        for x in (35, 96, 158, 221, 283):
+            pixel_rect(self.canvas, GRASS_DARK, (x - 8, 6, 16, 7))
+            pixel_rect(self.canvas, GRASS, (x - 10, 9, 20, 5))
+            pixel_rect(self.canvas, FLOWER, (x - 1, 4, 3, 3))
+            pixel_rect(self.canvas, GOLD, (x, 5, 1, 1))
+
+    def draw_ui(self):
+        pixel_rect(self.canvas, INK, (0, 0, VW, 15))
+        pixel_rect(self.canvas, GRASS_LIGHT, (0, 14, VW, 1))
+        self.canvas.blit(self.FONT.render(f"VIDAS {self.frog.lives}", False, WHITE), (5, 4))
+        self.canvas.blit(self.FONT.render(f"PONTOS {self.frog.score}", False, GOLD), (75, 4))
+        level_text = self.FONT.render(f"NIVEL {self.frog.level}", False, WHITE)
+        self.canvas.blit(level_text, (VW - level_text.get_width() - 5, 4))
+
+    def draw_overlay(self, color):
+        overlay = pygame.Surface((VW, VH), pygame.SRCALPHA)
+        overlay.fill(color)
+        self.canvas.blit(overlay, (0, 0))
+
+    def run(self):
+        while True:
+            dt = min(self.clock.tick(FPS) / 1000.0, 0.033)
+
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE:
+                        pygame.quit()
+                        sys.exit()
+                    if self.state == "title" and event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                        self.state = "playing"
+                    elif self.state in ("gameover", "win") and event.key == pygame.K_r:
+                        self.frog = Frog()
+                        self.movers = self.make_level(1)
+                        self.particles.clear()
+                        self.ripples.clear()
+                        self.state = "playing"
+                    elif self.state == "playing":
+                        if event.key in (pygame.K_UP, pygame.K_w): self.frog.request_jump(0, -TILE)
+                        elif event.key in (pygame.K_DOWN, pygame.K_s): self.frog.request_jump(0, TILE)
+                        elif event.key in (pygame.K_LEFT, pygame.K_a): self.frog.request_jump(-TILE, 0)
+                        elif event.key in (pygame.K_RIGHT, pygame.K_d): self.frog.request_jump(TILE, 0)
+
+            if self.state in ("playing", "dying"):
+                for mover in self.movers: mover.update(dt)
+
+            if self.state == "playing":
+                self.frog.update(dt)
+                self.frog.riding = None
+
+                if self.frog.jump >= 1 and self.is_water(self.frog.rect.centery):
+                    hits = [m for m in self.movers if self.frog.rect.colliderect(m.rect)]
+                    gators = [m for m in hits if m.kind == "gator"]
+                    logs = [m for m in hits if m.kind == "log"]
+                    if gators: self.begin_death("O JACARE PEGOU O SAPO!")
+                    elif logs: self.frog.riding = max(logs, key=lambda m: self.frog.rect.clip(m.rect).width)
+                    else: self.begin_death("O SAPO CAIU NA AGUA!")
+
+                if self.frog.x < -18 or self.frog.x > VW + 5:
+                    self.begin_death("A CORRENTEZA LEVOU O SAPO!")
+
+                if self.frog.y < 19:
+                    self.frog.score += 250
+                    self.frog.level += 1
+                    if self.frog.level > 5:
+                        self.state = "win"
+                    else:
+                        self.frog.reset()
+                        self.movers = self.make_level(self.frog.level)
+                        self.message = f"NIVEL {self.frog.level}: MAIS RAPIDO!"
+                        self.message_timer = 1.5
+
+            elif self.state == "dying":
+                self.death_timer -= dt
+                self.frog.sink = min(9, self.frog.sink + dt * 12)
+                if self.death_timer <= 0: self.finish_death()
+
+            self.message_timer = max(0, self.message_timer - dt)
+            self.shake = max(0, self.shake - dt)
+
+            for particle in self.particles[:]:
+                particle.update(dt)
+                if particle.life <= 0: self.particles.remove(particle)
+            for ripple in self.ripples[:]:
+                ripple.update(dt)
+                if ripple.age > ripple.life: self.ripples.remove(ripple)
+
+            self.draw_map()
+            for mover in self.movers: mover.draw(self.canvas)
+            for ripple in self.ripples: ripple.draw(self.canvas)
+
+            if self.state == "dying":
+                self.frog.draw(self.canvas, alpha=max(0, int(255 * self.death_timer / 1.05)), sink=self.frog.sink)
+            else:
+                self.frog.draw(self.canvas)
+
+            for particle in self.particles: particle.draw(self.canvas)
+            self.draw_ui()
+
+            if self.state == "title":
+                self.draw_overlay((6, 20, 24, 218))
+                old_blink, old_mouth = self.frog.blink, self.frog.mouth
+                self.frog.blink, self.frog.mouth = 0, 0
+                hero = self.frog.build_sprite()
+                hero = pygame.transform.scale(hero, (78, 69))
+                self.canvas.blit(hero, (VW // 2 - 39, 43))
+                self.frog.blink, self.frog.mouth = old_blink, old_mouth
+                self.text_center("SAPO AVENTUREIRO", self.BIG, 122, FROG_BELLY)
+                self.text_center("TRAVESSIA PIXEL", self.FONT, 148, FROG_LIGHT)
+                self.text_center("TRONCOS SAO SEGUROS", self.SMALL, 169, WHITE)
+                self.text_center("JACARES NAO SAO", self.SMALL, 179, RED)
+                self.text_center("[ ENTER ] JOGAR", self.FONT, 199, GOLD)
+                self.text_center("WASD OU SETAS", self.SMALL, 216, WHITE)
+            elif self.state == "gameover":
+                self.draw_overlay((35, 5, 8, 220))
+                self.text_center("FIM DE JOGO", self.BIG, 77, RED)
+                self.text_center(f"PONTUACAO: {self.frog.score}", self.FONT, 112, WHITE)
+                self.text_center("PRESSIONE R", self.FONT, 137, GOLD)
+                self.text_center("PARA RECOMECAR", self.SMALL, 152, WHITE)
+            elif self.state == "win":
+                self.draw_overlay((4, 30, 20, 212))
+                self.text_center("TRAVESSIA", self.BIG, 68, FROG_LIGHT)
+                self.text_center("CONCLUIDA!", self.BIG, 88, FROG_BELLY)
+                self.text_center(f"PONTUACAO: {self.frog.score}", self.FONT, 124, GOLD)
+                self.text_center("PRESSIONE R PARA JOGAR", self.SMALL, 153, WHITE)
+            elif self.message_timer > 0:
+                pixel_rect(self.canvas, INK, (54, 25, 212, 18))
+                pixel_rect(self.canvas, GOLD, (54, 25, 212, 1))
+                self.text_center(self.message, self.FONT, 31, GOLD)
+
+            scaled = pygame.transform.scale(self.canvas, (W, H))
+            if self.shake > 0:
+                offset_x, offset_y = random.randint(-5, 5), random.randint(-5, 5)
+                self.window.fill(INK)
+                self.window.blit(scaled, (offset_x, offset_y))
+            else:
+                self.window.blit(scaled, (0, 0))
+
+            pygame.display.flip()
+
+########## src/games/Sapo/game/entities/frog.py ##########
+import math
+import random
+import pygame
+from settings import VW, VH, FROG_OUTLINE, FROG_GREEN, FROG_LIGHT, FROG_BELLY, FROG_EYE, TONGUE, INK, pixel_rect
+
+class Frog:
+    def __init__(self):
+        self.lives = 3
+        self.score = 0
+        self.level = 1
+        self.total_time = 0
+        self.reset()
+
+    def reset(self):
+        self.x = VW // 2 - 9
+        self.y = 217
+        self.sx = self.tx = self.x
+        self.sy = self.ty = self.y
+        self.jump = 1.0
+        self.riding = None
+        self.invuln = 0.75
+        self.best_y = self.y
+        self.facing = "up"
+        self.sink = 0
+        self.blink = 0
+        self.blink_timer = random.uniform(1.5, 4.0)
+        self.second_blink = 0
+        self.mouth = 0
+        self.mouth_timer = random.uniform(2.5, 6.5)
+        self.look_timer = random.uniform(0.8, 2.5)
+        self.look_x = 0
+        self.look_y = 0
+
+    @property
+    def rect(self):
+        return pygame.Rect(int(self.x) + 4, int(self.y) + 5, 11, 11)
+
+    def request_jump(self, dx, dy):
+        if self.jump < 1: return
+        self.sx, self.sy = self.x, self.y
+        self.tx = max(1, min(VW - 19, self.x + dx))
+        self.ty = max(1, min(VH - 20, self.y + dy))
+        self.jump = 0
+        self.riding = None
+        if dy < 0: self.facing = "up"
+        elif dy > 0: self.facing = "down"
+        elif dx < 0: self.facing = "left"
+        elif dx > 0: self.facing = "right"
+
+    def update(self, dt):
+        self.total_time += dt
+        self.invuln = max(0, self.invuln - dt)
+        
+        self.blink_timer -= dt
+        if self.blink_timer <= 0 and self.blink <= 0 and self.second_blink <= 0:
+            self.blink = 0.12
+            self.second_blink = 0.22 if random.random() < 0.28 else 0
+            self.blink_timer = random.uniform(1.8, 4.8)
+        if self.blink > 0: self.blink -= dt
+        elif self.second_blink > 0:
+            self.second_blink -= dt
+            if self.second_blink <= 0.08:
+                self.blink = 0.11
+                self.second_blink = 0
+
+        self.mouth_timer -= dt
+        if self.mouth_timer <= 0 and self.mouth <= 0:
+            self.mouth = random.uniform(0.3, 0.55)
+            self.mouth_timer = random.uniform(3.0, 7.0)
+        self.mouth = max(0, self.mouth - dt)
+
+        self.look_timer -= dt
+        if self.look_timer <= 0:
+            self.look_x = random.choice((-1, 0, 0, 0, 1))
+            self.look_y = random.choice((-1, 0, 0, 1))
+            self.look_timer = random.uniform(0.8, 2.8)
+
+        if self.jump < 1:
+            self.jump = min(1, self.jump + dt * 6.2)
+            t = self.jump
+            smooth = t * t * (3 - 2 * t)
+            self.x = self.sx + (self.tx - self.sx) * smooth
+            self.y = self.sy + (self.ty - self.sy) * smooth
+            if self.jump >= 1 and self.y < self.best_y:
+                self.score += 10
+                self.best_y = self.y
+        elif self.riding:
+            self.x += self.riding.speed * dt
+            self.sx = self.tx = self.x
+
+    def build_sprite(self, alpha=255):
+        s = pygame.Surface((26, 23), pygame.SRCALPHA)
+        A = alpha
+        pixel_rect(s, (*FROG_OUTLINE, A), (1, 18, 10, 4))
+        pixel_rect(s, (*FROG_OUTLINE, A), (15, 18, 10, 4))
+        pixel_rect(s, (*FROG_GREEN, A), (2, 18, 8, 3))
+        pixel_rect(s, (*FROG_GREEN, A), (16, 18, 8, 3))
+        pixel_rect(s, (*FROG_LIGHT, A), (3, 18, 5, 1))
+        pixel_rect(s, (*FROG_LIGHT, A), (18, 18, 5, 1))
+        pixel_rect(s, (*FROG_OUTLINE, A), (0, 13, 6, 7))
+        pixel_rect(s, (*FROG_OUTLINE, A), (20, 13, 6, 7))
+        pixel_rect(s, (*FROG_GREEN, A), (1, 13, 5, 6))
+        pixel_rect(s, (*FROG_GREEN, A), (20, 13, 5, 6))
+        pixel_rect(s, (*FROG_LIGHT, A), (2, 14, 3, 2))
+        pixel_rect(s, (*FROG_LIGHT, A), (21, 14, 3, 2))
+        pixel_rect(s, (*FROG_OUTLINE, A), (4, 5, 18, 15))
+        pixel_rect(s, (*FROG_OUTLINE, A), (3, 8, 20, 8))
+        pixel_rect(s, (*FROG_GREEN, A), (4, 7, 18, 11))
+        pixel_rect(s, (*FROG_GREEN, A), (5, 5, 16, 14))
+        pixel_rect(s, (*FROG_LIGHT, A), (6, 6, 14, 3))
+        pixel_rect(s, (*FROG_BELLY, A), (6, 11, 14, 8))
+        pixel_rect(s, (*FROG_BELLY, A), (5, 12, 16, 4))
+        pixel_rect(s, (235, 229, 45, A), (7, 12, 11, 1))
+        pixel_rect(s, (*FROG_OUTLINE, A), (2, 9, 4, 7))
+        pixel_rect(s, (*FROG_OUTLINE, A), (20, 9, 4, 7))
+        pixel_rect(s, (*FROG_GREEN, A), (2, 10, 3, 5))
+        pixel_rect(s, (*FROG_GREEN, A), (21, 10, 3, 5))
+        pixel_rect(s, (*FROG_OUTLINE, A), (4, 1, 8, 8))
+        pixel_rect(s, (*FROG_OUTLINE, A), (14, 1, 8, 8))
+        pixel_rect(s, (*FROG_GREEN, A), (6, 0, 4, 2))
+        pixel_rect(s, (*FROG_GREEN, A), (16, 0, 4, 2))
+
+        if self.blink > 0:
+            pixel_rect(s, (*FROG_EYE, A), (5, 4, 6, 2))
+            pixel_rect(s, (*FROG_EYE, A), (15, 4, 6, 2))
+            pixel_rect(s, (*INK, A), (6, 5, 4, 1))
+            pixel_rect(s, (*INK, A), (16, 5, 4, 1))
+        else:
+            pixel_rect(s, (*FROG_EYE, A), (5, 2, 6, 6))
+            pixel_rect(s, (*FROG_EYE, A), (15, 2, 6, 6))
+            lx, ly = self.look_x, self.look_y
+            if self.facing == "left": lx = -1
+            elif self.facing == "right": lx = 1
+            elif self.facing == "up": ly = -1
+            elif self.facing == "down": ly = 1
+            pixel_rect(s, (*INK, A), (7 + lx, 3 + ly, 3, 4))
+            pixel_rect(s, (*INK, A), (16 + lx, 3 + ly, 3, 4))
+            pixel_rect(s, (*FROG_EYE, A), (7 + lx, 3 + ly, 1, 1))
+            pixel_rect(s, (*FROG_EYE, A), (16 + lx, 3 + ly, 1, 1))
+
+        pixel_rect(s, (*FROG_OUTLINE, A), (10, 9, 1, 1))
+        pixel_rect(s, (*FROG_OUTLINE, A), (15, 9, 1, 1))
+
+        if self.mouth > 0:
+            pixel_rect(s, (*INK, A), (6, 11, 14, 5))
+            pixel_rect(s, (*INK, A), (5, 10, 2, 3))
+            pixel_rect(s, (*INK, A), (19, 10, 2, 3))
+            pixel_rect(s, (*TONGUE, A), (9, 14, 8, 2))
+            pixel_rect(s, (255, 155, 171, A), (11, 14, 4, 1))
+        else:
+            pixel_rect(s, (*INK, A), (7, 13, 12, 2))
+            pixel_rect(s, (*INK, A), (5, 11, 2, 4))
+            pixel_rect(s, (*INK, A), (19, 11, 2, 4))
+        return s
+
+    def draw(self, surface, alpha=255, sink=0):
+        if self.invuln > 0 and int(self.invuln * 22) % 2: return
+        lift = int(math.sin(self.jump * math.pi) * 5) if self.jump < 1 else 0
+        breathe = 1 if self.jump >= 1 and math.sin(self.total_time * 3.2) > 0.8 else 0
+        sprite = self.build_sprite(alpha)
+
+        if self.jump < 1:
+            arc = math.sin(self.jump * math.pi)
+            sprite = pygame.transform.scale(sprite, (max(23, int(26 - arc)), int(23 + arc)))
+
+        angle = 0
+        if self.jump < 1 and self.facing == "left": angle = 4
+        elif self.jump < 1 and self.facing == "right": angle = -4
+        if angle: sprite = pygame.transform.rotate(sprite, angle)
+
+        shadow_w = max(7, 13 - lift)
+        pygame.draw.ellipse(surface, (15, 48, 50), (int(self.x + 9 - shadow_w / 2), int(self.y + 17), shadow_w, 2))
+        draw_x = int(self.x + 9 - sprite.get_width() / 2)
+        draw_y = int(self.y + 9 - sprite.get_height() / 2 - lift + sink + breathe)
+        surface.blit(sprite, (draw_x, draw_y))
+
+########## src/games/Sapo/game/entities/fx.py ##########
+import math
+import random
+import pygame
+from settings import WATER_FOAM, WATER_LIGHT
+
+class Particle:
+    def __init__(self, x, y, color):
+        angle = random.uniform(0, math.tau)
+        speed = random.uniform(10, 30)
+        self.x = float(x)
+        self.y = float(y)
+        self.vx = math.cos(angle) * speed
+        self.vy = math.sin(angle) * speed - 13
+        self.life = random.uniform(0.35, 0.75)
+        self.max_life = self.life
+        self.color = color
+        self.size = random.choice((1, 1, 2))
+
+    def update(self, dt):
+        self.life -= dt
+        self.x += self.vx * dt
+        self.y += self.vy * dt
+        self.vy += 32 * dt
+
+    def draw(self, surface):
+        if self.life > 0:
+            pygame.draw.rect(surface, self.color, (int(self.x), int(self.y), self.size, self.size))
+
+class Ripple:
+    def __init__(self, x, y, delay=0):
+        self.x = x
+        self.y = y
+        self.age = -delay
+        self.life = 0.75
+
+    def update(self, dt):
+        self.age += dt
+
+    def draw(self, surface):
+        if 0 <= self.age <= self.life:
+            t = self.age / self.life
+            width = int(4 + 24 * t)
+            height = max(2, width // 4)
+            color = WATER_FOAM if t < 0.7 else WATER_LIGHT
+            pygame.draw.ellipse(surface, color, (int(self.x - width / 2), int(self.y - height / 2), width, height), 1)
+
+########## src/games/Sapo/game/entities/mover.py ##########
+import pygame
+import random
+from settings import VW, WATER_DARK, WOOD_DARK, WOOD, WOOD_LIGHT, GATOR_DARK, GATOR, GATOR_LIGHT, GOLD, INK, WHITE, pixel_rect
+
+class Mover:
+    def __init__(self, x, y, width, speed, kind):
+        self.x = float(x)
+        self.y = y
+        self.width = width
+        self.speed = speed
+        self.kind = kind
+        self.rect = pygame.Rect(int(x), y + 4, width, 14)
+        self.anim = random.random() * 10
+
+    def update(self, dt):
+        self.anim += dt
+        self.x += self.speed * dt
+        if self.speed > 0 and self.x > VW + 28:
+            self.x = -self.width - 28
+        elif self.speed < 0 and self.x + self.width < -28:
+            self.x = VW + 28
+        self.rect.x = int(self.x)
+
+    def draw_log(self, surface):
+        r = self.rect
+        pixel_rect(surface, WATER_DARK, (r.x + 2, r.y + 3, r.w, r.h - 1))
+        pixel_rect(surface, WOOD_DARK, (r.x, r.y + 2, r.w, r.h - 4))
+        pixel_rect(surface, WOOD, (r.x + 2, r.y, r.w - 4, r.h - 3))
+        pixel_rect(surface, WOOD_LIGHT, (r.x + 5, r.y + 2, max(2, r.w - 12), 2))
+        pixel_rect(surface, WOOD_DARK, (r.x, r.y + 4, 3, r.h - 8))
+        pixel_rect(surface, WOOD_DARK, (r.right - 3, r.y + 4, 3, r.h - 8))
+        pixel_rect(surface, WOOD_LIGHT, (r.right - 2, r.y + 5, 1, 4))
+        for xx in range(r.x + 10, r.right - 7, 14):
+            pixel_rect(surface, WOOD_DARK, (xx, r.y + 4, 2, 6))
+            pixel_rect(surface, WOOD_LIGHT, (xx + 2, r.y + 3, 3, 1))
+
+    def draw_gator(self, surface):
+        r = self.rect
+        right = self.speed > 0
+        pixel_rect(surface, WATER_DARK, (r.x + 2, r.y + 4, r.w, 8))
+        pixel_rect(surface, GATOR_DARK, (r.x + 4, r.y + 3, r.w - 8, 9))
+        pixel_rect(surface, GATOR, (r.x + 7, r.y + 1, r.w - 14, 9))
+        pixel_rect(surface, GATOR_LIGHT, (r.x + 10, r.y + 2, max(2, r.w - 24), 2))
+        hx = r.right - 16 if right else r.x
+        pixel_rect(surface, GATOR, (hx, r.y, 16, 11))
+        pixel_rect(surface, GATOR_LIGHT, (hx + 2, r.y + 1, 11, 3))
+        ex = hx + 11 if right else hx + 4
+        pixel_rect(surface, GOLD, (ex, r.y, 3, 3))
+        pixel_rect(surface, INK, (ex + (1 if right else 0), r.y + 1, 1, 1))
+        pixel_rect(surface, INK, (hx + 2, r.y + 7, 12, 1))
+        for tx in range(hx + 4, hx + 13, 4):
+            pixel_rect(surface, WHITE, (tx, r.y + 8, 1, 2))
+        for xx in range(r.x + 12, r.right - 17, 8):
+            pygame.draw.polygon(surface, GATOR_DARK, [(xx, r.y + 2), (xx + 3, r.y - 2), (xx + 6, r.y + 2)])
+        if right:
+            pygame.draw.polygon(surface, GATOR_DARK, [(r.x + 7, r.y + 3), (r.x - 5, r.y + 7), (r.x + 7, r.y + 10)])
+        else:
+            pygame.draw.polygon(surface, GATOR_DARK, [(r.right - 7, r.y + 3), (r.right + 5, r.y + 7), (r.right - 7, r.y + 10)])
+
+    def draw(self, surface):
+        if self.kind == "log":
+            self.draw_log(surface)
+        else:
+            self.draw_gator(surface)
+
+
+
+########## src/games/Space Invaders/README.md ##########
+# Space Invaders
+
+Jogo arcade espacial desenvolvido em Python com Pygame.
+
+## Estrutura
+
+```text
+space_invaders/
+├── main.py
+├── README.md
+├── requirements.txt
+├── requirements
+├── settings.py
+└── game/
+    ├── __init__.py
+    └── app.py
+```
+
+## Instalação
+
+```cmd
+pip install -r requirements.txt
+```
+
+## Execução
+
+```cmd
+python main.py
+```
+
+## Controles
+
+- WASD ou setas: movimentar
+- Espaço: disparar
+- Shift: impulso
+- P: pausar
+- Esc: voltar
+
+## Alteração desta versão
+
+A nave mantém o desenho detalhado, mas agora é renderizada em 62% do tamanho anterior. A hitbox e o escudo também foram reduzidos proporcionalmente.
+
+
+########## src/games/Space Invaders/main.py ##########
+"""Ponto de entrada do Space Invaders."""
+from game import Game
+
+
+if __name__ == "__main__":
+    Game().run()
+
+
+########## src/games/Space Invaders/requirements.txt ##########
+pygame>=2.5,<3.0
+
+
+########## src/games/Space Invaders/settings.py ##########
+"""Configurações centrais do projeto.
+
+As configurações principais do jogo continuam em game/app.py para preservar
+compatibilidade. Este arquivo concentra metadados usados pelo projeto.
+"""
+GAME_TITLE = "Space Invaders"
+VERSION = "2.1"
+WINDOW_SIZE = (960, 540)
+FPS = 60
+PLAYER_VISUAL_SCALE = 0.62
+
+
+########## src/games/Space Invaders/game/__init__.py ##########
+from .app import Game
+
+__all__ = ["Game"]
+
+
+########## src/games/Space Invaders/game/app.py ##########
+"""
+NEON VOID - arcade espacial em um unico arquivo.
+Requisito: pip install pygame
+Execucao: python main.py
+
+Controles:
+  WASD / setas : mover
+  Espaco       : disparar
+  Shift        : impulso
+  P            : pausar
+  ESC          : voltar / sair
+  Enter        : confirmar
+"""
+
+import math
+import random
+import sys
+from array import array
+
+try:
+    import pygame
+except ImportError:
+    print("Pygame nao encontrado. Instale com: pip install pygame")
+    raise
+
+# ----------------------------- CONFIGURACAO -----------------------------
+WIDTH, HEIGHT = 960, 540
+FPS = 60
+TITLE = "NEON VOID"
+Vec = pygame.Vector2
+
+BLACK = (2, 5, 15)
+WHITE = (235, 250, 255)
+CYAN = (35, 245, 255)
+BLUE = (40, 110, 255)
+PURPLE = (155, 65, 255)
+PINK = (255, 55, 150)
+RED = (255, 65, 80)
+ORANGE = (255, 150, 55)
+YELLOW = (255, 230, 90)
+GREEN = (80, 255, 160)
+
+pygame.mixer.pre_init(44100, -16, 2, 512)
+pygame.init()
+pygame.display.set_caption(TITLE)
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+clock = pygame.time.Clock()
+
+FONT_BIG = pygame.font.SysFont("arialblack", 68)
+FONT_TITLE = pygame.font.SysFont("arialblack", 38)
+FONT = pygame.font.SysFont("segoeui", 22)
+FONT_SMALL = pygame.font.SysFont("consolas", 16)
+FONT_TINY = pygame.font.SysFont("consolas", 12)
+
+
+def clamp(v, lo, hi):
+    return max(lo, min(hi, v))
+
+
+def glow_circle(surface, color, pos, radius, strength=4):
+    radius = max(1, int(radius))
+    pad = radius * 4
+    g = pygame.Surface((pad * 2, pad * 2), pygame.SRCALPHA)
+    c = (pad, pad)
+    for i in range(strength, 0, -1):
+        r = radius + i * radius // 2
+        a = max(5, 30 // i)
+        pygame.draw.circle(g, (*color, a), c, r)
+    pygame.draw.circle(g, (*color, 230), c, radius)
+    surface.blit(g, (int(pos[0] - pad), int(pos[1] - pad)), special_flags=pygame.BLEND_ADD)
+
+
+def text(surf, value, font, color, pos, anchor="topleft", shadow=True):
+    img = font.render(str(value), True, color)
+    rect = img.get_rect()
+    setattr(rect, anchor, pos)
+    if shadow:
+        sh = font.render(str(value), True, (0, 0, 0))
+        sr = sh.get_rect()
+        setattr(sr, anchor, (pos[0] + 3, pos[1] + 3))
+        surf.blit(sh, sr)
+    surf.blit(img, rect)
+    return rect
+
+
+def synth_tone(freq=440, duration=.08, volume=.2, slide=0):
+    try:
+        sample_rate = 44100
+        n = int(duration * sample_rate)
+        buf = array("h")
+        for i in range(n):
+            t = i / sample_rate
+            f = freq + slide * (i / max(1, n))
+            env = (1 - i / max(1, n)) ** 1.7
+            val = int(32767 * volume * env * math.sin(2 * math.pi * f * t))
+            buf.append(val); buf.append(val)
+        return pygame.mixer.Sound(buffer=buf)
+    except Exception:
+        return None
+
+
+SND_SHOT = synth_tone(700, .055, .12, 260)
+SND_HIT = synth_tone(130, .10, .15, -50)
+SND_PICK = synth_tone(520, .16, .16, 650)
+SND_BOOM = synth_tone(90, .24, .22, -60)
+
+
+def play(sound):
+    if sound:
+        sound.play()
+
+
+# ----------------------------- FUNDO ESPACIAL -----------------------------
+class Starfield:
+    def __init__(self):
+        self.stars = []
+        for _ in range(150):
+            self.stars.append([random.uniform(0, WIDTH), random.uniform(0, HEIGHT),
+                               random.choice((.25, .45, .8, 1.3)), random.randint(1, 3)])
+        self.nebula = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        for _ in range(18):
+            x, y = random.randrange(WIDTH), random.randrange(HEIGHT)
+            r = random.randrange(60, 180)
+            c = random.choice(((15, 45, 120, 7), (80, 15, 130, 6), (0, 100, 145, 5)))
+            pygame.draw.circle(self.nebula, c, (x, y), r)
+
+    def update(self, speed):
+        for s in self.stars:
+            s[1] += s[2] * speed
+            if s[1] > HEIGHT:
+                s[0], s[1] = random.uniform(0, WIDTH), -4
+
+    def draw(self, surf):
+        surf.fill(BLACK)
+        surf.blit(self.nebula, (0, 0))
+        for x, y, z, size in self.stars:
+            col = (int(125 + 90*z), int(160 + 65*z), 255)
+            pygame.draw.line(surf, col, (x, y), (x, y + size + z*3), max(1, size//2))
+
+
+class Particle:
+    def __init__(self, pos, vel, color, life, size):
+        self.pos = Vec(pos); self.vel = Vec(vel)
+        self.color = color; self.life = life; self.max_life = life; self.size = size
+
+    def update(self, dt):
+        self.life -= dt
+        self.pos += self.vel * dt
+        self.vel *= .985
+        return self.life > 0
+
+    def draw(self, surf):
+        a = clamp(self.life / self.max_life, 0, 1)
+        r = max(1, int(self.size * a))
+        glow_circle(surf, self.color, self.pos, r, 2)
+
+
+class FloatingText:
+    def __init__(self, pos, value, color=WHITE):
+        self.pos = Vec(pos); self.value = value; self.color = color; self.life = 1
+
+    def update(self, dt):
+        self.life -= dt; self.pos.y -= 42 * dt
+        return self.life > 0
+
+    def draw(self, surf):
+        text(surf, self.value, FONT_SMALL, self.color, self.pos, "center")
+
+
+# ----------------------------- ENTIDADES -----------------------------
+class Bullet:
+    def __init__(self, pos, vel, friendly=True, damage=1, color=CYAN, radius=4):
+        self.pos = Vec(pos); self.vel = Vec(vel); self.friendly = friendly
+        self.damage = damage; self.color = color; self.radius = radius
+
+    def update(self, dt):
+        self.pos += self.vel * dt
+        return -40 < self.pos.x < WIDTH + 40 and -50 < self.pos.y < HEIGHT + 50
+
+    def draw(self, surf):
+        tail = self.pos - self.vel.normalize() * 16 if self.vel.length_squared() else self.pos
+        pygame.draw.line(surf, self.color, tail, self.pos, max(2, self.radius))
+        glow_circle(surf, self.color, self.pos, self.radius, 3)
+
+    @property
+    def rect(self):
+        return pygame.Rect(self.pos.x-self.radius, self.pos.y-self.radius,
+                           self.radius*2, self.radius*2)
+
+
+class Player:
+    def __init__(self):
+        self.pos = Vec(WIDTH/2, HEIGHT-80)
+        self.vel = Vec(); self.radius = 18
+        self.hp = 100; self.max_hp = 100
+        self.energy = 100; self.shield = 0
+        self.cooldown = 0; self.invuln = 0
+        self.weapon = 1; self.weapon_timer = 0
+
+    def update(self, dt, particles):
+        keys = pygame.key.get_pressed()
+        direction = Vec(keys[pygame.K_d] - keys[pygame.K_a] + keys[pygame.K_RIGHT] - keys[pygame.K_LEFT],
+                        keys[pygame.K_s] - keys[pygame.K_w] + keys[pygame.K_DOWN] - keys[pygame.K_UP])
+        if direction.length_squared(): direction = direction.normalize()
+        boosting = (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]) and self.energy > 2
+        speed = 355 if boosting else 235
+        if boosting: self.energy -= 42 * dt
+        else: self.energy = min(100, self.energy + 22 * dt)
+        target = direction * speed
+        self.vel = self.vel.lerp(target, min(1, 9*dt))
+        self.pos += self.vel * dt
+        self.pos.x = clamp(self.pos.x, 24, WIDTH-24)
+        self.pos.y = clamp(self.pos.y, 55, HEIGHT-25)
+        self.cooldown -= dt; self.invuln -= dt; self.weapon_timer -= dt
+        if self.weapon_timer <= 0: self.weapon = 1
+        if random.random() < .65:
+            color = CYAN if boosting else BLUE
+            particles.append(Particle(self.pos + Vec(random.uniform(-6,6), 23),
+                                      Vec(random.uniform(-25,25), random.uniform(90,170)), color, .3, 5))
+
+    def shoot(self, bullets):
+        if self.cooldown > 0: return
+        play(SND_SHOT)
+        if self.weapon == 1:
+            bullets.append(Bullet(self.pos + Vec(0,-24), Vec(0,-590)))
+            self.cooldown = .16
+        elif self.weapon == 2:
+            for angle in (-7, 7):
+                v = Vec(0,-620).rotate(angle)
+                bullets.append(Bullet(self.pos + Vec(angle/3,-22), v, True, 1, CYAN, 4))
+            self.cooldown = .13
+        else:
+            for angle in (-13, 0, 13):
+                bullets.append(Bullet(self.pos + Vec(0,-24), Vec(0,-650).rotate(angle), True, 2, GREEN, 5))
+            self.cooldown = .12
+
+    def hit(self, damage):
+        if self.invuln > 0: return False
+        if self.shield > 0:
+            self.shield -= damage
+        else:
+            self.hp -= damage
+        self.invuln = .65
+        play(SND_HIT)
+        return True
+
+    def draw(self, surf):
+        if self.invuln > 0 and int(self.invuln*14) % 2: return
+        x, y = int(self.pos.x), int(self.pos.y)
+        keys = pygame.key.get_pressed()
+        boost = (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]) and self.energy > 2
+        pulse = math.sin(pygame.time.get_ticks() * .02)
+
+        # Nave compacta: aproximadamente 38 px de largura por 42 px de altura.
+        flame = 12 + (7 if boost else 0) + int(pulse * 2)
+        glow_circle(surf, BLUE, (x, y + 15), 7 if not boost else 10, 3)
+        pygame.draw.polygon(surf, (30, 90, 255), [(x-4,y+13),(x,y+13+flame),(x+4,y+13)])
+        pygame.draw.polygon(surf, CYAN, [(x-2,y+13),(x,y+19+flame//2),(x+2,y+13)])
+
+        # Asas e fuselagem metálica.
+        pygame.draw.polygon(surf, (25,38,60), [(x,y-20),(x-7,y-8),(x-20,y+13),(x-7,y+9),(x,y+18),(x+7,y+9),(x+20,y+13),(x+7,y-8)])
+        pygame.draw.polygon(surf, (100,130,158), [(x-19,y+12),(x-7,y-7),(x-5,y+8),(x-10,y+12)])
+        pygame.draw.polygon(surf, (100,130,158), [(x+19,y+12),(x+7,y-7),(x+5,y+8),(x+10,y+12)])
+        pygame.draw.polygon(surf, (226,237,244), [(x,y-20),(x-6,y-4),(x-4,y+10),(x,y+15)])
+        pygame.draw.polygon(surf, (125,151,176), [(x,y-20),(x+6,y-4),(x+4,y+10),(x,y+15)])
+        pygame.draw.line(surf, WHITE, (x,y-18), (x,y+6), 1)
+
+        # Cockpit e canhões.
+        pygame.draw.ellipse(surf, (3,24,46), (x-5,y-11,10,16))
+        pygame.draw.ellipse(surf, CYAN, (x-4,y-10,8,13))
+        pygame.draw.ellipse(surf, WHITE, (x-2,y-9,3,7))
+        pygame.draw.rect(surf, (180,205,220), (x-12,y-1,3,15), border_radius=1)
+        pygame.draw.rect(surf, (180,205,220), (x+9,y-1,3,15), border_radius=1)
+        pygame.draw.circle(surf, PINK, (x-15,y+10), 2)
+        pygame.draw.circle(surf, PINK, (x+15,y+10), 2)
+
+        if self.shield > 0:
+            shield = pygame.Surface((58,58), pygame.SRCALPHA)
+            r = 25 + int(pulse)
+            pygame.draw.circle(shield, (40,205,255,25), (29,29), r)
+            pygame.draw.circle(shield, (80,240,255,180), (29,29), r, 2)
+            pygame.draw.arc(shield, WHITE, (4,4,50,50), .2, 1.5, 2)
+            surf.blit(shield, (x-29,y-29), special_flags=pygame.BLEND_ADD)
+
+    @property
+    def rect(self):
+        return pygame.Rect(self.pos.x-10, self.pos.y-13, 20, 27)
+
+
+class Asteroid:
+    def __init__(self, difficulty=1):
+        self.radius = random.randint(16, 39)
+        self.pos = Vec(random.randint(35, WIDTH-35), -self.radius-10)
+        self.vel = Vec(random.uniform(-35,35), random.uniform(75,130) + difficulty*8)
+        self.rot = random.random()*360; self.rot_speed = random.uniform(-80,80)
+        self.hp = max(1, self.radius//13); self.max_hp = self.hp
+        self.shape = []
+        for i in range(12):
+            a = i*30
+            r = self.radius * random.uniform(.72,1.05)
+            self.shape.append(Vec(math.cos(math.radians(a))*r, math.sin(math.radians(a))*r))
+
+    def update(self, dt):
+        self.pos += self.vel*dt; self.rot += self.rot_speed*dt
+        return self.pos.y < HEIGHT+self.radius+30
+
+    def draw(self, surf):
+        pts = [self.pos + p.rotate(self.rot) for p in self.shape]
+        pygame.draw.polygon(surf, (70,76,94), pts)
+        pygame.draw.polygon(surf, (120,135,158), pts, 2)
+        for off, r in ((Vec(-.3,-.25), .22), (Vec(.28,.2), .15), (Vec(.15,-.38), .1)):
+            p = self.pos + off*self.radius
+            pygame.draw.circle(surf, (46,51,67), p, max(2,int(self.radius*r)))
+
+    @property
+    def rect(self):
+        return pygame.Rect(self.pos.x-self.radius*.72, self.pos.y-self.radius*.72,
+                           self.radius*1.44, self.radius*1.44)
+
+
+class Enemy:
+    def __init__(self, level=1, elite=False):
+        self.elite = elite
+        self.pos = Vec(random.randint(60, WIDTH-60), -40)
+        self.t = random.random()*10; self.base_x = self.pos.x
+        self.hp = (8 + level*2) if elite else (2 + level//3)
+        self.max_hp = self.hp
+        self.speed = 55 + level*4; self.cooldown = random.uniform(.7,1.8)
+        self.radius = 25 if elite else 17
+
+    def update(self, dt, bullets, player):
+        self.t += dt; self.pos.y += self.speed*dt
+        self.pos.x = self.base_x + math.sin(self.t*2.1)*70
+        self.cooldown -= dt
+        if self.cooldown <= 0 and self.pos.y > 20:
+            aim = player.pos-self.pos
+            if aim.length_squared(): aim.scale_to_length(210 if not self.elite else 260)
+            bullets.append(Bullet(self.pos+Vec(0,12), aim, False, 13 if self.elite else 9, PINK, 5))
+            self.cooldown = .75 if self.elite else random.uniform(1.3,2.2)
+        return self.pos.y < HEIGHT+60
+
+    def draw(self, surf):
+        x,y = self.pos; c = PURPLE if self.elite else RED
+        pygame.draw.ellipse(surf, (110,115,135), (x-self.radius,y-8,self.radius*2,18))
+        pygame.draw.ellipse(surf, (195,210,220), (x-self.radius*.55,y-17,self.radius*1.1,22))
+        pygame.draw.arc(surf, c, (x-self.radius*.55,y-17,self.radius*1.1,22), math.pi, math.pi*2, 3)
+        for ox in (-.55,0,.55): glow_circle(surf, c, (x+ox*self.radius,y+7), 3, 2)
+        if self.hp < self.max_hp:
+            pygame.draw.rect(surf, (25,30,45), (x-22,y-28,44,5))
+            pygame.draw.rect(surf, c, (x-22,y-28,44*self.hp/self.max_hp,5))
+
+    @property
+    def rect(self):
+        return pygame.Rect(self.pos.x-self.radius, self.pos.y-15, self.radius*2, 30)
+
+
+class Powerup:
+    COLORS = {"shield": CYAN, "repair": GREEN, "weapon": YELLOW}
+    LABELS = {"shield": "S", "repair": "+", "weapon": "W"}
+    def __init__(self, pos):
+        self.kind = random.choice(("shield","repair","weapon"))
+        self.pos = Vec(pos); self.t = 0
+
+    def update(self, dt):
+        self.t += dt; self.pos.y += 75*dt
+        return self.pos.y < HEIGHT+30
+
+    def draw(self, surf):
+        c = self.COLORS[self.kind]
+        glow_circle(surf,c,self.pos,12,3)
+        pygame.draw.circle(surf,(15,28,45),self.pos,9)
+        text(surf,self.LABELS[self.kind],FONT_TINY,c,self.pos,"center",False)
+
+    @property
+    def rect(self): return pygame.Rect(self.pos.x-13,self.pos.y-13,26,26)
+
+
+# ----------------------------- JOGO -----------------------------
+class Game:
+    def __init__(self):
+        self.stars = Starfield()
+        self.highscore = 0
+        self.state = "menu"
+        self.menu_index = 0
+        self.reset()
+
+    def reset(self):
+        self.player = Player(); self.bullets=[]; self.asteroids=[]; self.enemies=[]
+        self.powerups=[]; self.particles=[]; self.floaters=[]
+        self.score=0; self.combo=1; self.combo_time=0
+        self.wave=1; self.wave_timer=0; self.spawn_timer=.4
+        self.shake=0; self.paused=False; self.message="ONDA 1"; self.message_time=2
+
+    def burst(self, pos, color, amount=18, power=150):
+        for _ in range(amount):
+            v = Vec(random.uniform(-1,1),random.uniform(-1,1))
+            if v.length_squared(): v.scale_to_length(random.uniform(30,power))
+            self.particles.append(Particle(pos,v,color,random.uniform(.25,.75),random.uniform(2,7)))
+
+    def destroy(self, obj, reward):
+        color = ORANGE if isinstance(obj, Asteroid) else PURPLE
+        self.burst(obj.pos,color,24 if reward>100 else 14,210)
+        play(SND_BOOM); self.shake=max(self.shake,8)
+        gained=reward*self.combo; self.score+=gained
+        self.floaters.append(FloatingText(obj.pos,f"+{gained}",YELLOW))
+        self.combo=min(8,self.combo+1); self.combo_time=2.4
+        if random.random()<.09: self.powerups.append(Powerup(obj.pos))
+
+    def new_wave(self):
+        self.wave += 1; self.wave_timer=0; self.spawn_timer=.2
+        self.message=f"ONDA {self.wave}"; self.message_time=2
+        if self.wave % 5 == 0:
+            self.enemies.append(Enemy(self.wave, True)); self.message="ALVO ELITE"
+
+    def update_play(self, dt):
+        if self.paused: return
+        self.stars.update(1.0 + self.wave*.03)
+        self.player.update(dt,self.particles)
+        keys=pygame.key.get_pressed()
+        if keys[pygame.K_SPACE]: self.player.shoot(self.bullets)
+        self.message_time-=dt; self.combo_time-=dt
+        if self.combo_time<=0: self.combo=1
+        self.wave_timer+=dt
+        if self.wave_timer>18: self.new_wave()
+        self.spawn_timer-=dt
+        if self.spawn_timer<=0:
+            if random.random()<.67: self.asteroids.append(Asteroid(self.wave))
+            else: self.enemies.append(Enemy(self.wave))
+            self.spawn_timer=max(.22,1.0-self.wave*.045)*random.uniform(.7,1.3)
+
+        self.bullets=[b for b in self.bullets if b.update(dt)]
+        self.asteroids=[a for a in self.asteroids if a.update(dt)]
+        self.enemies=[e for e in self.enemies if e.update(dt,self.bullets,self.player)]
+        self.powerups=[p for p in self.powerups if p.update(dt)]
+        self.particles=[p for p in self.particles if p.update(dt)]
+        self.floaters=[f for f in self.floaters if f.update(dt)]
+
+        # tiros do jogador
+        for b in self.bullets[:]:
+            if not b.friendly: continue
+            targets=self.asteroids+self.enemies
+            for obj in targets:
+                if b.rect.colliderect(obj.rect):
+                    obj.hp-=b.damage
+                    if b in self.bullets: self.bullets.remove(b)
+                    self.burst(b.pos,b.color,4,70)
+                    if obj.hp<=0:
+                        if obj in self.asteroids: self.asteroids.remove(obj); self.destroy(obj,40+obj.radius)
+                        elif obj in self.enemies: self.enemies.remove(obj); self.destroy(obj,250 if obj.elite else 90)
+                    break
+
+        # impactos no jogador
+        for b in self.bullets[:]:
+            if not b.friendly and b.rect.colliderect(self.player.rect):
+                if self.player.hit(b.damage): self.burst(self.player.pos,RED,12,150); self.shake=10
+                if b in self.bullets: self.bullets.remove(b)
+        for obj in self.asteroids[:] + self.enemies[:]:
+            if obj.rect.colliderect(self.player.rect):
+                if self.player.hit(22): self.burst(self.player.pos,ORANGE,15,180); self.shake=12
+                if obj in self.asteroids: self.asteroids.remove(obj)
+                elif obj in self.enemies: self.enemies.remove(obj)
+        for p in self.powerups[:]:
+            if p.rect.colliderect(self.player.rect):
+                play(SND_PICK); self.burst(p.pos,p.COLORS[p.kind],15,120)
+                if p.kind=="shield": self.player.shield=min(50,self.player.shield+35)
+                elif p.kind=="repair": self.player.hp=min(100,self.player.hp+30)
+                else: self.player.weapon=min(3,self.player.weapon+1); self.player.weapon_timer=12
+                self.floaters.append(FloatingText(p.pos,p.kind.upper(),p.COLORS[p.kind]))
+                self.powerups.remove(p)
+        if self.player.hp<=0:
+            self.highscore=max(self.highscore,self.score); self.state="gameover"; play(SND_BOOM)
+
+    def draw_hud(self,surf):
+        panel=pygame.Surface((WIDTH,60),pygame.SRCALPHA); panel.fill((3,8,24,190)); surf.blit(panel,(0,0))
+        text(surf,"INTEGRIDADE",FONT_TINY,(150,180,200),(18,10))
+        pygame.draw.rect(surf,(30,40,57),(18,28,210,13),border_radius=6)
+        hpw=210*max(0,self.player.hp)/100
+        pygame.draw.rect(surf,GREEN if self.player.hp>35 else RED,(18,28,hpw,13),border_radius=6)
+        text(surf,f"{max(0,int(self.player.hp))}%",FONT_TINY,WHITE,(123,34),"center",False)
+        text(surf,"ENERGIA",FONT_TINY,(150,180,200),(250,10))
+        pygame.draw.rect(surf,(30,40,57),(250,28,130,10),border_radius=5)
+        pygame.draw.rect(surf,CYAN,(250,28,130*self.player.energy/100,10),border_radius=5)
+        if self.player.shield>0: text(surf,f"ESCUDO {int(self.player.shield)}",FONT_TINY,CYAN,(400,20))
+        text(surf,f"{self.score:08d}",FONT_TITLE,WHITE,(WIDTH-20,6),"topright")
+        text(surf,f"ONDA {self.wave}   x{self.combo}",FONT_SMALL,YELLOW,(WIDTH-20,45),"bottomright")
+        if self.player.weapon_timer>0:
+            text(surf,f"ARMA NV.{self.player.weapon}  {self.player.weapon_timer:0.1f}s",FONT_TINY,YELLOW,(WIDTH/2,18),"midtop")
+
+    def draw_play(self):
+        world=pygame.Surface((WIDTH,HEIGHT)); self.stars.draw(world)
+        for p in self.powerups: p.draw(world)
+        for a in self.asteroids: a.draw(world)
+        for e in self.enemies: e.draw(world)
+        for b in self.bullets: b.draw(world)
+        self.player.draw(world)
+        for p in self.particles: p.draw(world)
+        for f in self.floaters: f.draw(world)
+        offset=(random.randint(-int(self.shake),int(self.shake)),random.randint(-int(self.shake),int(self.shake))) if self.shake>0 else (0,0)
+        self.shake=max(0,self.shake-.55)
+        screen.blit(world,offset); self.draw_hud(screen)
+        if self.message_time>0: text(screen,self.message,FONT_BIG,CYAN,(WIDTH/2,HEIGHT/2),"center")
+        if self.paused:
+            shade=pygame.Surface((WIDTH,HEIGHT),pygame.SRCALPHA); shade.fill((0,0,10,170)); screen.blit(shade,(0,0))
+            text(screen,"PAUSADO",FONT_BIG,WHITE,(WIDTH/2,HEIGHT/2-20),"center")
+            text(screen,"P para continuar",FONT,CYAN,(WIDTH/2,HEIGHT/2+42),"center")
+
+    def draw_menu(self):
+        self.stars.update(.45); self.stars.draw(screen)
+        # planeta decorativo
+        glow_circle(screen,BLUE,(760,155),72,4)
+        pygame.draw.circle(screen,(25,67,125),(760,155),64)
+        pygame.draw.arc(screen,(80,170,255),(695,120,130,55),0,math.pi,8)
+        text(screen,"NEON",FONT_BIG,WHITE,(66,75))
+        text(screen,"VOID",FONT_BIG,CYAN,(66,137))
+        text(screen,"COMANDO ESTELAR",FONT_SMALL,(145,190,230),(71,213))
+        items=("INICIAR MISSAO","COMO JOGAR","SAIR")
+        for i,item in enumerate(items):
+            y=305+i*55; selected=i==self.menu_index
+            if selected:
+                pygame.draw.rect(screen,(15,80,125),(58,y-7,286,42),border_radius=8)
+                pygame.draw.rect(screen,CYAN,(58,y-7,5,42),border_radius=3)
+            text(screen,item,FONT,CYAN if selected else (145,165,190),(78,y))
+        text(screen,"W/S ou setas  |  ENTER",FONT_TINY,(105,130,160),(60,500))
+        text(screen,"ARCADE PROTOCOL // v1.0",FONT_TINY,(70,100,130),(WIDTH-25,HEIGHT-20),"bottomright")
+
+    def draw_help(self):
+        self.stars.draw(screen)
+        text(screen,"COMO JOGAR",FONT_TITLE,CYAN,(WIDTH/2,70),"center")
+        rows=(("WASD / SETAS","Movimentar nave"),("ESPACO","Disparar"),("SHIFT","Impulso de velocidade"),("P","Pausar"),("ESC","Voltar"))
+        for i,(key,desc) in enumerate(rows):
+            y=145+i*55; pygame.draw.rect(screen,(12,24,45),(210,y-7,540,42),border_radius=7)
+            text(screen,key,FONT_SMALL,YELLOW,(235,y+5)); text(screen,desc,FONT_SMALL,WHITE,(430,y+5))
+        text(screen,"Colete S (escudo), + (reparo) e W (arma).",FONT_SMALL,GREEN,(WIDTH/2,450),"center")
+        text(screen,"ESC para voltar",FONT_TINY,(145,165,190),(WIDTH/2,505),"center")
+
+    def draw_gameover(self):
+        self.stars.draw(screen)
+        text(screen,"MISSAO ENCERRADA",FONT_TITLE,RED,(WIDTH/2,125),"center")
+        text(screen,f"PONTUACAO  {self.score:08d}",FONT_TITLE,WHITE,(WIDTH/2,220),"center")
+        text(screen,f"RECORDE  {self.highscore:08d}",FONT,CYAN,(WIDTH/2,276),"center")
+        text(screen,f"ONDA ALCANCADA  {self.wave}",FONT_SMALL,YELLOW,(WIDTH/2,320),"center")
+        text(screen,"ENTER para reiniciar",FONT,CYAN,(WIDTH/2,395),"center")
+        text(screen,"ESC para o menu",FONT_SMALL,(150,170,195),(WIDTH/2,440),"center")
+
+    def event(self,e):
+        if e.type==pygame.KEYDOWN:
+            if self.state=="menu":
+                if e.key in (pygame.K_w,pygame.K_UP): self.menu_index=(self.menu_index-1)%3
+                elif e.key in (pygame.K_s,pygame.K_DOWN): self.menu_index=(self.menu_index+1)%3
+                elif e.key in (pygame.K_RETURN,pygame.K_SPACE):
+                    if self.menu_index==0: self.reset(); self.state="play"
+                    elif self.menu_index==1: self.state="help"
+                    else: pygame.quit(); sys.exit()
+                elif e.key==pygame.K_ESCAPE: pygame.quit(); sys.exit()
+            elif self.state=="help" and e.key==pygame.K_ESCAPE: self.state="menu"
+            elif self.state=="play":
+                if e.key==pygame.K_p: self.paused=not self.paused
+                elif e.key==pygame.K_ESCAPE: self.state="menu"
+            elif self.state=="gameover":
+                if e.key==pygame.K_RETURN: self.reset(); self.state="play"
+                elif e.key==pygame.K_ESCAPE: self.state="menu"
+
+    def run(self):
+        while True:
+            dt=min(clock.tick(FPS)/1000, .033)
+            for e in pygame.event.get():
+                if e.type==pygame.QUIT: pygame.quit(); return
+                self.event(e)
+            if self.state=="play": self.update_play(dt); self.draw_play()
+            elif self.state=="menu": self.draw_menu()
+            elif self.state=="help": self.draw_help()
+            else: self.stars.update(.3); self.draw_gameover()
+            pygame.display.flip()
+
+
+
+
+########## src/games/imports/LEIA-ME.txt ##########
+Coloque aqui os .zip dos jogos. Ex: game6.zip -> vira games/game6/ sozinho.
+O zip precisa ter um main.py na raiz.
+
+
+########## src/utils/__init__.py ##########
+
+
+########## src/utils/zip_extractor.py ##########
+"""
+zip_extractor.py
+================
+Le a pasta games/imports/ e extrai qualquer .zip para dentro de games/.
+Um zip chamado "game6.zip" vira a pasta games/game6/.
+O zip continua em imports/ (nao apaga nada).
+"""
+import os
+import zipfile
+
+
+def extrair_zips(games_dir):
+    imports_dir = os.path.join(games_dir, "imports")
+    if not os.path.isdir(imports_dir):
+        return
+    for arquivo in os.listdir(imports_dir):
+        if not arquivo.lower().endswith(".zip"):
+            continue
+        nome_jogo = os.path.splitext(arquivo)[0]
+        destino = os.path.join(games_dir, nome_jogo)
+        if os.path.isdir(destino) and os.path.exists(os.path.join(destino, "main.py")):
+            continue
+        caminho_zip = os.path.join(imports_dir, arquivo)
+        try:
+            with zipfile.ZipFile(caminho_zip, "r") as z:
+                os.makedirs(destino, exist_ok=True)
+                z.extractall(destino)
+            _achatar_se_necessario(destino)
+            print(f"[zip_extractor] Extraido: {arquivo} -> {nome_jogo}/")
+        except Exception as e:
+            print(f"[zip_extractor] Erro ao extrair {arquivo}: {e}")
+
+
+def _achatar_se_necessario(destino):
+    itens = os.listdir(destino)
+    if len(itens) == 1:
+        unico = os.path.join(destino, itens[0])
+        if os.path.isdir(unico) and not os.path.exists(os.path.join(destino, "main.py")):
+            for sub in os.listdir(unico):
+                os.rename(os.path.join(unico, sub), os.path.join(destino, sub))
+            os.rmdir(unico)
+
+
+if __name__ == "__main__":
+    base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    extrair_zips(os.path.join(base, "games"))

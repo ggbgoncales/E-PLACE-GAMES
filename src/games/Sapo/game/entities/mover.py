@@ -62,4 +62,3 @@ class Mover:
             self.draw_log(surface)
         else:
             self.draw_gator(surface)
-

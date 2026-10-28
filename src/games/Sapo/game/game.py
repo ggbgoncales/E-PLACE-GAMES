@@ -1,6 +1,29 @@
+import os
+os.environ["SDL_VIDEO_WINDOW_POS"] = "0,0"
+os.environ["SDL_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR"] = "0"
+import os
 import sys
+import json
 import pygame
 import random
+
+RECORDE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "recorde.json")
+
+
+def carregar_recorde():
+    try:
+        with open(RECORDE_FILE, "r", encoding="utf-8") as f:
+            return int(json.load(f).get("recorde", 0))
+    except Exception:
+        return 0
+
+
+def salvar_recorde(valor):
+    try:
+        with open(RECORDE_FILE, "w", encoding="utf-8") as f:
+            json.dump({"recorde": valor}, f)
+    except Exception:
+        pass
 from settings import *
 from game.entities.frog import Frog
 from game.entities.mover import Mover
@@ -9,17 +32,29 @@ from game.entities.fx import Particle, Ripple
 class Game:
     def __init__(self):
         pygame.init()
-        self.window = pygame.display.set_mode((W, H))
+        # Tela cheia: o cenario continua pixel art (320x240 ampliado),
+        # mas os TEXTOS sao desenhados direto na tela, com fonte normal e nitida.
+        self.window = pygame.display.set_mode(pygame.display.get_desktop_sizes()[0], pygame.NOFRAME)
+        ww, wh = self.window.get_size()
+        self.scale = min(ww / VW, wh / VH)
+        self.out_w, self.out_h = int(VW * self.scale), int(VH * self.scale)
+        self.ox, self.oy = (ww - self.out_w) // 2, (wh - self.out_h) // 2
+        self.textos = []
+        self._fontes = {}
         pygame.display.set_caption("Sapo Aventureiro Pixel")
         self.canvas = pygame.Surface((VW, VH))
         self.clock = pygame.time.Clock()
         
-        self.FONT = pygame.font.SysFont("consolas", 8, bold=True)
-        self.SMALL = pygame.font.SysFont("consolas", 6, bold=True)
-        self.BIG = pygame.font.SysFont("consolas", 16, bold=True)
+        # tamanhos "virtuais" (na escala 320x240); viram fonte grande e nitida
+        self.FONT = 8
+        self.SMALL = 6
+        self.BIG = 16
 
+        self.recorde = carregar_recorde()
+        self.novo_recorde = False
         self.frog = Frog()
         self.movers = self.make_level(1)
+        self.tempo = self.tempo_nivel(1)
         self.particles = []
         self.ripples = []
         
@@ -31,17 +66,48 @@ class Game:
         self.water_time = 0
         self.shake = 0
 
+    # ------------------------------------------------------------------
+    # MODO INFINITO: cada nivel e gerado na hora e fica mais dificil
+    # ------------------------------------------------------------------
+    def tempo_nivel(self, level):
+        """Tempo para atravessar: comeca em 30s e cai ate 14s."""
+        return max(14.0, 30.0 - (level - 1) * 1.5)
+
     def make_level(self, level):
-        multiplier = min(1 + (level - 1) * 0.12, 1.65)
-        specs = [
-            (40, 27, [("log", -20, 70), ("gator", 88, 45), ("log", 170, 82), ("log", 300, 62)]),
-            (60, -33, [("log", 5, 60), ("gator", 95, 48), ("log", 170, 72), ("gator", 272, 46), ("log", 340, 66)]),
-            (80, 38, [("gator", -35, 46), ("log", 35, 86), ("log", 170, 63), ("gator", 263, 46), ("log", 337, 76)]),
-            (120, -29, [("log", -50, 82), ("gator", 65, 46), ("log", 137, 80), ("log", 260, 70), ("gator", 357, 46)]),
-            (140, 35, [("log", -35, 64), ("gator", 60, 47), ("log", 138, 84), ("gator", 260, 47), ("log", 337, 73)]),
-            (160, -40, [("gator", -28, 47), ("log", 50, 80), ("log", 177, 66), ("gator", 273, 47), ("log", 347, 78)]),
-        ]
-        return [Mover(x, y, width, speed * multiplier, kind) for y, speed, items in specs for kind, x, width in items]
+        # velocidade sobe 14% por nivel (sem limite ate 3x)
+        mult = min(1.0 + (level - 1) * 0.14, 3.0)
+        # chance de jacare: 20% no nivel 1 ate 55%
+        chance_jacare = min(0.20 + (level - 1) * 0.05, 0.55)
+        # troncos encolhem: 60-90 no nivel 1 ate 34-50
+        log_min = max(34, 60 - (level - 1) * 4)
+        log_max = max(50, 90 - (level - 1) * 5)
+        # buracos de agua entre os objetos aumentam
+        gap_min = min(14 + (level - 1) * 2, 34)
+        gap_max = min(34 + (level - 1) * 4, 70)
+
+        movers = []
+        direcao = random.choice((1, -1))
+        for y in sorted(LANES):
+            speed = random.uniform(26, 40) * mult * direcao
+            direcao = -direcao
+            x = random.uniform(-40, 0)
+            logs_na_faixa = 0
+            itens = []
+            while x < VW + 20:
+                # garante pelo menos 2 troncos por faixa (sempre da para passar)
+                if random.random() < chance_jacare and logs_na_faixa >= 1 and itens and itens[-1][0] != "gator":
+                    itens.append(("gator", x, 46))
+                    x += 46
+                else:
+                    w = random.randint(log_min, log_max)
+                    itens.append(("log", x, w))
+                    logs_na_faixa += 1
+                    x += w
+                x += random.uniform(gap_min, gap_max)
+            if logs_na_faixa < 2:
+                itens.append(("log", x, log_max))
+            movers += [Mover(ix, y, w, speed, kind) for kind, ix, w in itens]
+        return movers
 
     def is_water(self, y):
         return any(row <= y < row + TILE for row in LANES)
@@ -63,15 +129,44 @@ class Game:
         self.frog.lives -= 1
         if self.frog.lives <= 0:
             self.state = "gameover"
+            if self.frog.score > self.recorde:
+                self.recorde = self.frog.score
+                self.novo_recorde = True
+                salvar_recorde(self.recorde)
         else:
             self.frog.reset()
+            self.tempo = self.tempo_nivel(self.frog.level)
             self.state = "playing"
             self.message = self.death_reason
             self.message_timer = 1.1
 
-    def text_center(self, text, font, y, color=WHITE):
-        image = font.render(text, False, color)
-        self.canvas.blit(image, (VW // 2 - image.get_width() // 2, y))
+    def fonte(self, tamanho):
+        px = max(10, int(tamanho * self.scale))
+        if px not in self._fontes:
+            caminho = None
+            for nome in ("ubuntu", "notosans", "dejavusans", "liberationsans", "arial", "verdana"):
+                caminho = pygame.font.match_font(nome, bold=True)
+                if caminho:
+                    break
+            self._fontes[px] = pygame.font.Font(caminho, px) if caminho else pygame.font.Font(None, int(px * 1.35))
+        return self._fontes[px]
+
+    def texto(self, text, tamanho, x, y, color=WHITE, anchor="topleft"):
+        """Agenda um texto (coordenadas 320x240) para ser desenhado nitido na tela."""
+        self.textos.append((text, tamanho, x, y, color, anchor))
+
+    def text_center(self, text, tamanho, y, color=WHITE):
+        self.texto(text, tamanho, VW / 2, y, color, "midtop")
+
+    def desenhar_textos(self, dx, dy):
+        for text, tamanho, x, y, color, anchor in self.textos:
+            fonte = self.fonte(tamanho)
+            pos = (self.ox + dx + x * self.scale, self.oy + dy + y * self.scale)
+            sombra = fonte.render(text, True, INK)
+            self.window.blit(sombra, sombra.get_rect(**{anchor: (pos[0] + 2, pos[1] + 2)}))
+            img = fonte.render(text, True, color)
+            self.window.blit(img, img.get_rect(**{anchor: pos}))
+        self.textos.clear()
 
     def draw_map(self):
         self.water_time += 1 / FPS
@@ -107,10 +202,15 @@ class Game:
     def draw_ui(self):
         pixel_rect(self.canvas, INK, (0, 0, VW, 15))
         pixel_rect(self.canvas, GRASS_LIGHT, (0, 14, VW, 1))
-        self.canvas.blit(self.FONT.render(f"VIDAS {self.frog.lives}", False, WHITE), (5, 4))
-        self.canvas.blit(self.FONT.render(f"PONTOS {self.frog.score}", False, GOLD), (75, 4))
-        level_text = self.FONT.render(f"NIVEL {self.frog.level}", False, WHITE)
-        self.canvas.blit(level_text, (VW - level_text.get_width() - 5, 4))
+        self.texto(f"VIDAS {self.frog.lives}", self.FONT, 4, 3, WHITE)
+        self.texto(f"PONTOS {self.frog.score}", self.FONT, 62, 3, GOLD)
+        cor_tempo = RED if self.tempo <= 5 else WHITE
+        self.texto(f"TEMPO {int(self.tempo) + 1}", self.FONT, 158, 3, cor_tempo)
+        self.texto(f"NIVEL {self.frog.level}", self.FONT, VW - 4, 3, WHITE, "topright")
+        # barra de tempo
+        total = self.tempo_nivel(self.frog.level)
+        largura = int(VW * max(0, self.tempo) / total)
+        pixel_rect(self.canvas, RED if self.tempo <= 5 else GOLD, (0, 14, largura, 1))
 
     def draw_overlay(self, color):
         overlay = pygame.Surface((VW, VH), pygame.SRCALPHA)
@@ -131,9 +231,11 @@ class Game:
                         sys.exit()
                     if self.state == "title" and event.key in (pygame.K_RETURN, pygame.K_SPACE):
                         self.state = "playing"
-                    elif self.state in ("gameover", "win") and event.key == pygame.K_r:
+                    elif self.state == "gameover" and event.key == pygame.K_r:
                         self.frog = Frog()
                         self.movers = self.make_level(1)
+                        self.tempo = self.tempo_nivel(1)
+                        self.novo_recorde = False
                         self.particles.clear()
                         self.ripples.clear()
                         self.state = "playing"
@@ -161,16 +263,25 @@ class Game:
                 if self.frog.x < -18 or self.frog.x > VW + 5:
                     self.begin_death("A CORRENTEZA LEVOU O SAPO!")
 
-                if self.frog.y < 19:
-                    self.frog.score += 250
+                # contagem regressiva
+                self.tempo -= dt
+                if self.tempo <= 0:
+                    self.tempo = 0
+                    self.begin_death("ACABOU O TEMPO!")
+
+                if self.state == "playing" and self.frog.y < 19:
+                    # bonus: nivel + tempo que sobrou
+                    self.frog.score += 250 + 50 * (self.frog.level - 1) + int(self.tempo) * 10
                     self.frog.level += 1
-                    if self.frog.level > 5:
-                        self.state = "win"
+                    self.frog.reset()
+                    self.movers = self.make_level(self.frog.level)
+                    self.tempo = self.tempo_nivel(self.frog.level)
+                    if self.frog.level % 5 == 0 and self.frog.lives < 5:
+                        self.frog.lives += 1
+                        self.message = f"NIVEL {self.frog.level}: +1 VIDA!"
                     else:
-                        self.frog.reset()
-                        self.movers = self.make_level(self.frog.level)
-                        self.message = f"NIVEL {self.frog.level}: MAIS RAPIDO!"
-                        self.message_timer = 1.5
+                        self.message = f"NIVEL {self.frog.level}: MAIS DIFICIL!"
+                    self.message_timer = 1.5
 
             elif self.state == "dying":
                 self.death_timer -= dt
@@ -209,33 +320,30 @@ class Game:
                 self.frog.blink, self.frog.mouth = old_blink, old_mouth
                 self.text_center("SAPO AVENTUREIRO", self.BIG, 122, FROG_BELLY)
                 self.text_center("TRAVESSIA PIXEL", self.FONT, 148, FROG_LIGHT)
-                self.text_center("TRONCOS SAO SEGUROS", self.SMALL, 169, WHITE)
-                self.text_center("JACARES NAO SAO", self.SMALL, 179, RED)
+                self.text_center("TRONCOS SAO SEGUROS - JACARES NAO", self.SMALL, 167, WHITE)
+                self.text_center(f"MODO INFINITO  -  RECORDE: {self.recorde}", self.SMALL, 179, GOLD)
                 self.text_center("[ ENTER ] JOGAR", self.FONT, 199, GOLD)
                 self.text_center("WASD OU SETAS", self.SMALL, 216, WHITE)
             elif self.state == "gameover":
                 self.draw_overlay((35, 5, 8, 220))
-                self.text_center("FIM DE JOGO", self.BIG, 77, RED)
-                self.text_center(f"PONTUACAO: {self.frog.score}", self.FONT, 112, WHITE)
-                self.text_center("PRESSIONE R", self.FONT, 137, GOLD)
-                self.text_center("PARA RECOMECAR", self.SMALL, 152, WHITE)
-            elif self.state == "win":
-                self.draw_overlay((4, 30, 20, 212))
-                self.text_center("TRAVESSIA", self.BIG, 68, FROG_LIGHT)
-                self.text_center("CONCLUIDA!", self.BIG, 88, FROG_BELLY)
-                self.text_center(f"PONTUACAO: {self.frog.score}", self.FONT, 124, GOLD)
-                self.text_center("PRESSIONE R PARA JOGAR", self.SMALL, 153, WHITE)
+                self.text_center("FIM DE JOGO", self.BIG, 62, RED)
+                self.text_center(f"PONTUACAO: {self.frog.score}", self.FONT, 98, WHITE)
+                self.text_center(f"NIVEL ALCANCADO: {self.frog.level}", self.FONT, 113, WHITE)
+                if self.novo_recorde:
+                    self.text_center("NOVO RECORDE!", self.FONT, 130, FROG_BELLY)
+                else:
+                    self.text_center(f"RECORDE: {self.recorde}", self.FONT, 130, GOLD)
+                self.text_center("R PARA RECOMECAR  -  ESC PARA SAIR", self.SMALL, 156, WHITE)
             elif self.message_timer > 0:
                 pixel_rect(self.canvas, INK, (54, 25, 212, 18))
                 pixel_rect(self.canvas, GOLD, (54, 25, 212, 1))
                 self.text_center(self.message, self.FONT, 31, GOLD)
 
-            scaled = pygame.transform.scale(self.canvas, (W, H))
+            scaled = pygame.transform.scale(self.canvas, (self.out_w, self.out_h))
+            offset_x = offset_y = 0
             if self.shake > 0:
                 offset_x, offset_y = random.randint(-5, 5), random.randint(-5, 5)
-                self.window.fill(INK)
-                self.window.blit(scaled, (offset_x, offset_y))
-            else:
-                self.window.blit(scaled, (0, 0))
-
+            self.window.fill(INK)
+            self.window.blit(scaled, (self.ox + offset_x, self.oy + offset_y))
+            self.desenhar_textos(offset_x, offset_y)
             pygame.display.flip()

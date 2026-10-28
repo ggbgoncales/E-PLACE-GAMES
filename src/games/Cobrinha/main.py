@@ -1,3 +1,6 @@
+import os
+os.environ["SDL_VIDEO_WINDOW_POS"] = "0,0"
+os.environ["SDL_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR"] = "0"
 import math
 import random
 import sys
@@ -150,7 +153,7 @@ class Button:
 
 class SnakeGame:
     def __init__(self):
-        self.screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
+        self.screen = pygame.display.set_mode(pygame.display.get_desktop_sizes()[0], pygame.NOFRAME)
         self.canvas = pygame.Surface((WIDTH, HEIGHT))
         self.clock = pygame.time.Clock()
         self.font_sm = pygame.font.SysFont("segoeui", 18)
@@ -161,7 +164,7 @@ class SnakeGame:
         self.record = load_record()
         self.particles = []
         self.state = "menu"
-        self.fullscreen = False
+        self.fullscreen = True
         self.difficulty = 1
         self.difficulties = [
             ("TRANQUILO", 7.0, CYAN),
@@ -223,8 +226,12 @@ class SnakeGame:
 
     def toggle_fullscreen(self):
         self.fullscreen = not self.fullscreen
-        flags = pygame.FULLSCREEN if self.fullscreen else pygame.RESIZABLE
-        self.screen = pygame.display.set_mode((WIDTH, HEIGHT), flags)
+
+        if self.fullscreen:
+            self.screen = pygame.display.set_mode(pygame.display.get_desktop_sizes()[0], pygame.NOFRAME)
+        else:
+            self.screen = pygame.display.set_mode(pygame.display.get_desktop_sizes()[0], pygame.NOFRAME)
+
 
     def add_burst(self, cell, color, count=18):
         x = cell[0] * CELL + CELL / 2
@@ -244,6 +251,9 @@ class SnakeGame:
                 self.toggle_fullscreen()
             elif event.key == pygame.K_m:
                 self.sounds.enabled = not self.sounds.enabled
+            elif self.state == "menu" and event.key == pygame.K_ESCAPE:
+                pygame.quit()
+                sys.exit()
             elif event.key in (pygame.K_ESCAPE, pygame.K_p):
                 if self.state == "playing":
                     self.state = "paused"
