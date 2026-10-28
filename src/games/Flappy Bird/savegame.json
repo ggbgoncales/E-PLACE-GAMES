@@ -5,13 +5,16 @@
   "effect": "classic",
   "owned_hats": [
     "none",
-    "cap"
+    "cap",
+    "halo"
   ],
   "owned_effects": [
-    "classic"
+    "classic",
+    "fire"
   ],
   "skin": "gold",
   "owned_skins": [
-    "gold"
+    "gold",
+    "mint"
   ]
 }
