@@ -11,12 +11,14 @@ Nao desenha nada e nao usa pygame (da para testar sem tela).
 """
 from dataclasses import dataclass, field
 
-from settings import CHAO_Y, ARENA_MIN_X, ARENA_MAX_X, GRAVIDADE
+from settings import CHAO_Y, ARENA_MIN_X, ARENA_MAX_X, GRAVIDADE, FPS, GUARDA_MAX
 from game.combat import Box
 
 BOTOES = ("soco", "chute", "especial1", "especial2", "dash")
 BUFFER_FRAMES = 8
 NORMAIS = ("soco", "soco_baixo", "chute", "rasteira")
+ESPECIAIS = ("especial1", "especial2")
+ALCANCE_ARREMESSO = 105
 
 
 @dataclass
@@ -67,6 +69,11 @@ class Fighter:
         self.cancelou = False
         self.pousou = False            # True no frame em que toca o chao (para poeira)
         self.passo = 0.0               # distancia andada p/ frente(+)/tras(-): anima os passos
+        self.cd = {k: 0 for k in ESPECIAIS}        # recarga dos especiais (frames)
+        self.guarda = 0.0                          # sobe ao defender; cheia = guarda quebrada
+        self.guarda_t = 0                          # frames desde a ultima defesa
+        self.quebrou = False                       # evento p/ o app (texto/som)
+        self.dist_op = 999.0
 
     # ================================================================ estado
     @property
@@ -137,9 +144,18 @@ class Fighter:
         return [(i, h) for i, h in enumerate(self.golpe.hits)
                 if h.start <= self.golpe_t <= h.end and i not in self.acertos]
 
+    def cd_max(self, nome):
+        return max(1, int(self.char.cooldown.get(nome, 0) * FPS))
+
+    def cd_frac(self, nome):
+        """0 = pronto ... 1 = acabou de usar (para o HUD)."""
+        return self.cd.get(nome, 0) / self.cd_max(nome)
+
     def pode_usar(self, nome, combate):
         g = self.char.golpes.get(nome)
         if g is None:
+            return False
+        if self.cd.get(nome, 0) > 0:                 # especial recarregando
             return False
         if g.spawn and g.spawn["tipo"] == "projetil":
             return combate.projeteis_de(self) < self.char.max_projeteis
@@ -155,6 +171,13 @@ class Fighter:
         self.segurando_tras = cmd.tras(self.facing)
         self.segurando_baixo = cmd.baixo
         self.pousou = False
+        self.dist_op = abs(oponente.x - self.x)
+        for k in self.cd:                                  # recarga dos especiais
+            if self.cd[k] > 0:
+                self.cd[k] -= 1
+        self.guarda_t += 1
+        if self.guarda_t > 30 and self.guarda > 0:         # meio segundo sem defender: recupera
+            self.guarda = max(0.0, self.guarda - 1.5)
 
         # buffer: um botao apertado ate 6 frames antes ainda sai
         if cmd.apertou:
@@ -197,15 +220,24 @@ class Fighter:
             self._controle_livre(cmd, oponente, combate)
 
         self._fisica()
+        if self.no_chao and self.estado in ("idle", "walk", "crouch"):
+            self._virar(oponente)                          # livre no chao: sempre olha p/ o oponente
+
+    def _virar(self, op):
+        if abs(op.x - self.x) > 4:
+            self.facing = 1 if op.x > self.x else -1
 
     def _controle_livre(self, cmd, op, combate):
         botoes = self.buf_botoes
         if self.no_chao:
             self.usou_aereo = False
-            if abs(op.x - self.x) > 4:
-                self.facing = 1 if op.x > self.x else -1
+            self._virar(op)
             self.agachado = cmd.baixo
 
+            if {"soco", "chute"} <= botoes and self._pode_arremessar(op):
+                self._consumir_buffer()
+                self.iniciar_golpe("arremesso")
+                return
             nome = self._escolher_golpe(botoes)
             if nome and self.pode_usar(nome, combate):
                 self._consumir_buffer()
@@ -237,10 +269,18 @@ class Fighter:
                 if self.estado != novo:
                     self.set_estado(novo)
         else:
+            if self.estado == "jump":                      # controle no ar (leve)
+                dirx = int(cmd.direita) - int(cmd.esquerda)
+                lim = self.char.vel_pulo_x * 1.1
+                self.vx = max(-lim, min(lim, self.vx + dirx * 0.35))
             if ("soco" in botoes or "chute" in botoes) and not self.usou_aereo:
                 self._consumir_buffer()
                 self.usou_aereo = True
                 self.iniciar_golpe("aereo")
+
+    def _pode_arremessar(self, op):
+        return (self.dist_op <= ALCANCE_ARREMESSO and op.no_chao
+                and op.estado not in ("hitstun", "knockdown", "ko"))
 
     def _consumir_buffer(self):
         self.buf_botoes, self.buf_t = set(), 0
@@ -257,6 +297,8 @@ class Fighter:
         return None
 
     def iniciar_golpe(self, nome):
+        if nome in self.cd:
+            self.cd[nome] = self.cd_max(nome)            # comeca a recarga
         self.golpe = self.char.golpes[nome]
         self.golpe_t = 0
         self.golpe_acertou = False
@@ -370,6 +412,15 @@ class Fighter:
 
     def bloquear_golpe(self, hit, direcao, chip):
         self.hp = max(1.0, self.hp - chip)       # dano de raspao nao mata
+        self.guarda += 8 + hit.dano * 1.2
+        self.guarda_t = 0
+        if self.guarda >= GUARDA_MAX:            # GUARDA QUEBRADA: fica tonto
+            self.guarda = 0.0
+            self.quebrou = True
+            self.set_estado("hitstun")
+            self.stun = 46
+            self.vx = direcao * 3
+            return
         self.set_estado("blockstun")
-        self.stun = hit.blockstun
+        self.stun = max(2, hit.blockstun - 2)     # sai da defesa um pouco antes (da p/ revidar)
         self.vx = direcao * hit.knockback * 0.8

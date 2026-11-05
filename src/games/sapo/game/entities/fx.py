@@ -3,6 +3,7 @@ import random
 import pygame
 from settings import WATER_FOAM, WATER_LIGHT
 
+
 class Particle:
     def __init__(self, x, y, color):
         angle = random.uniform(0, math.tau)
@@ -25,6 +26,7 @@ class Particle:
     def draw(self, surface):
         if self.life > 0:
             pygame.draw.rect(surface, self.color, (int(self.x), int(self.y), self.size, self.size))
+
 
 class Ripple:
     def __init__(self, x, y, delay=0):

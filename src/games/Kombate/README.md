@@ -82,3 +82,10 @@ fighter.py, combat.py, ai.py e match.py nao usam pygame (testaveis sem tela).
   no quadros.json. Andar para tras toca o mesmo ciclo ao contrario.
 - Rubro e Colosso tambem tem quadros de pulo (pulo_sobe / pulo_desce).
 - Troca de pose com transicao suave (a pose anterior some em 4 quadros).
+
+### Combate (atualizacao)
+- RECARGA: cada especial tem cooldown (COOLDOWNS em game/characters.py); icones no HUD enchem ate ficar pronto.
+- ARREMESSO: soco + chute juntos colado no oponente (nao pode ser defendido). A CPU usa contra quem so defende.
+- GUARDA: defender muitos golpes sem pausa quebra a guarda (fica tonto ~0,8s). Barra "GUARDA" aparece no HUD.
+- DASH: toque duplo para frente/tras (alem do Shift). Controle leve da direcao durante o pulo.
+- Sai da defesa um pouco mais rapido (da para revidar) e sempre vira para o oponente.

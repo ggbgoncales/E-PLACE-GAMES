@@ -28,4 +28,6 @@ CONTROLES = {
         "dash": "right shift"},
 }
 
-DANO_GLOBAL = 4.0                    # multiplicador de dano de todos os golpes
+DANO_GLOBAL = 4.0
+GUARDA_MAX = 100                     # defender muitos golpes seguidos quebra a guarda
+DUPLO_TOQUE = 14                     # frames para o toque duplo (dash) ser reconhecido                    # multiplicador de dano de todos os golpes

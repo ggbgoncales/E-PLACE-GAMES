@@ -1,3 +1,2 @@
+"""Pacote do jogo."""
 from .app import Game
-
-__all__ = ["Game"]

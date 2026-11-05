@@ -1,4 +1,4 @@
-"""Configurações centrais do jogo."""
+"""Configuracoes centrais do jogo."""
 WIDTH, HEIGHT = 480, 720
 FPS = 60
 TITLE = "Flappy Bird: Skyward"

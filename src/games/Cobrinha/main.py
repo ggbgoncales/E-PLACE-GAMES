@@ -182,7 +182,6 @@ class SnakeGame:
         self.next_direction = (1, 0)
         self.food = (0, 0)
         self.special_food = None
-        self.special_timer = 0.0
         self.move_acc = 0.0
         self.score = 0
         self.combo = 1
@@ -196,7 +195,11 @@ class SnakeGame:
         self.spawn_food()
 
     def spawn_food(self):
-        free = [(x, y) for x in range(COLS) for y in range(ROWS) if (x, y) not in self.snake]
+        # Nunca gere a comida normal em cima da cobra nem da comida especial.
+        free = [
+            (x, y) for x in range(COLS) for y in range(ROWS)
+            if (x, y) not in self.snake and (x, y) != self.special_food
+        ]
         if not free:
             self.state = "gameover"
             return
@@ -205,7 +208,6 @@ class SnakeGame:
             candidates = [p for p in free if p != self.food]
             if candidates:
                 self.special_food = random.choice(candidates)
-                self.special_timer = 7.0
 
     def make_menu_buttons(self):
         self.buttons = [
@@ -230,7 +232,7 @@ class SnakeGame:
         if self.fullscreen:
             self.screen = pygame.display.set_mode(pygame.display.get_desktop_sizes()[0], pygame.NOFRAME)
         else:
-            self.screen = pygame.display.set_mode(pygame.display.get_desktop_sizes()[0], pygame.NOFRAME)
+            self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
 
     def add_burst(self, cell, color, count=18):
@@ -274,7 +276,9 @@ class SnakeGame:
                 }
                 if event.key in directions:
                     candidate = directions[event.key]
-                    if candidate != (-self.direction[0], -self.direction[1]):
+                    # Valida contra a ultima direcao enfileirada. Isso evita
+                    # duas teclas rapidas produzirem uma reversao de 180 graus.
+                    if candidate != (-self.next_direction[0], -self.next_direction[1]):
                         self.next_direction = candidate
                         self.sounds.play(self.sounds.turn)
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1 and self.state == "menu":
@@ -312,10 +316,6 @@ class SnakeGame:
         self.combo_timer = max(0, self.combo_timer - dt)
         if self.combo_timer <= 0:
             self.combo = 1
-        if self.special_food:
-            self.special_timer -= dt
-            if self.special_timer <= 0:
-                self.special_food = None
 
         speed = self.difficulties[self.difficulty][1] + min(6, self.score / 90)
         self.move_acc += dt
@@ -563,11 +563,12 @@ class SnakeGame:
                 self.draw_overlay(True)
 
         sw, sh = self.screen.get_size()
-        scale = min(sw / WIDTH, sh / HEIGHT)
-        fitted = pygame.transform.smoothscale(self.canvas, (int(WIDTH * scale), int(HEIGHT * scale)))
-        self.screen.fill((2, 4, 9))
-        ox = (sw - fitted.get_width()) // 2
-        oy = (sh - fitted.get_height()) // 2
+        # Preenche a tela inteira para eliminar as barras pretas laterais.
+        # A imagem pode sofrer uma leve distorcao em monitores cuja proporcao
+        # seja diferente da resolucao virtual do jogo.
+        fitted = pygame.transform.smoothscale(self.canvas, (sw, sh))
+        ox = 0
+        oy = 0
         if self.shake:
             ox += random.randint(-int(self.shake), int(self.shake))
             oy += random.randint(-int(self.shake), int(self.shake))

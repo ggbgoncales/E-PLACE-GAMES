@@ -36,7 +36,7 @@ SPRITES = {
 # golpe -> pose do sprite
 POSE_GOLPE = {
     "soco": "soco", "chute": "chute", "soco_baixo": "agachar", "rasteira": "rasteira",
-    "aereo": "aereo", "especial1": "especial1", "especial2": "especial2",
+    "aereo": "aereo", "especial1": "especial1", "especial2": "especial2", "arremesso": "soco",
 }
 
 _folhas = {}
@@ -57,8 +57,8 @@ class Folha:
         self._alinhar_pe("aereo", (58, 12))          # pe na hitbox do chute aereo
         self._girada("voando", "dano", 32)           # arremessado no ar
         self._girada("dash", "andar", -9)            # corrida inclinada
-        if "pulo" not in self.q and "agachar" in self.q:
-            self.q["pulo"] = self.q["agachar"]       # pulo encolhido
+        if "pulo" not in self.q and "idle" in self.q:
+            self.q["pulo"] = self.q["idle"]       # pulo encolhido
         self.ciclo = [n for n in info.get("ciclo_andar", []) if n in self.q]
         if not self.ciclo and "andar" in self.q:
             self.ciclo = ["andar", "idle"]
@@ -197,9 +197,12 @@ def _escolher(f, tempo, vitoria, folha):
     if e == "attack" and f.golpe:
         return _pose_golpe(f)
     if e == "jump" or alt > 3:
-        if "pulo_sobe" in folha.q:
-            return ("pulo_sobe" if f.vy < 2 else "pulo_desce"), 0, 0
-        return "pulo", 0, 0
+        # pulo em pe (sem encolher): corpo esticado o tempo todo
+        if f.vy > 0 and alt < 35:                      # chegando no chao: pose de guarda
+            return "idle", 0, 0
+        if "pulo_desce" in folha.q:                    # pernas esticadas
+            return "pulo_desce", 0, 0
+        return "idle", 0, 0
     if e == "crouch" or f.agachado:
         return "agachar", 0, 0
     if e == "walk":

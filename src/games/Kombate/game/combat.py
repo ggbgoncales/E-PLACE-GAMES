@@ -158,6 +158,12 @@ class CombatManager:
             defensor.bloquear_golpe(hit, direcao, chip)
             if not projetil:
                 atacante.golpe_acertou = True
+            if defensor.quebrou:
+                defensor.quebrou = False
+                self.hitstop = self.HITSTOP_GRAB
+                self._efeito(ponto_x, ponto_y, "agarrao", 30)
+                self.eventos.append(("guarda", defensor.x, defensor.y - 240, 0))
+                return True
             self.hitstop = self.HITSTOP_BLOCK
             self._efeito(ponto_x, ponto_y, "bloqueio")
             return True

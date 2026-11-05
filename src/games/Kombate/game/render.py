@@ -9,7 +9,7 @@ import random
 
 import pygame
 
-from settings import LARGURA, ALTURA, CHAO_Y
+from settings import LARGURA, ALTURA, CHAO_Y, GUARDA_MAX
 from game.fx import glow
 
 
@@ -642,6 +642,24 @@ def desenhar_hud(surf, partida, fontes, tempo):
                 pygame.draw.polygon(surf, (255, 210, 60), [(px + (cx - px) * 0.25, py + (cy - py) * 0.25) for px, py in pts])
             pygame.draw.polygon(surf, (150, 120, 90), pts, 2)
 
+        # recarga dos especiais (2 icones) + barra de guarda
+        teclas = ("R", "T") if f.slot == 1 else ("I", "O")
+        if partida.cpus.get(f.slot) is not None:
+            teclas = ("1", "2")
+        for i, nome in enumerate(("especial1", "especial2")):
+            cx = (x0 + 18 + i * 40) if lado == -1 else (x0 + largura - 18 - i * 40)
+            cy = topo + alto + 58
+            _icone_cd(surf, (cx, cy), f.cd_frac(nome), cor_texto(f.char.cor), teclas[i], fontes, tempo)
+        if f.guarda > 1:
+            gw = int(150 * min(1.0, f.guarda / GUARDA_MAX))
+            gx = (x0 + 100) if lado == -1 else (x0 + largura - 100 - 150)
+            gy = topo + alto + 54
+            pygame.draw.rect(surf, (20, 14, 22), (gx - 2, gy - 2, 154, 10), border_radius=4)
+            cor_g = (120, 200, 255) if f.guarda < GUARDA_MAX * 0.7 else ((255, 90, 70) if (tempo // 6) % 2 else (255, 200, 90))
+            rx = gx if lado == -1 else gx + 150 - gw
+            pygame.draw.rect(surf, cor_g, (rx, gy, gw, 6), border_radius=3)
+            texto(surf, "GUARDA", fontes["mini"], cor_g, ((gx + 76), gy + 15), contorno=1)
+
         cpu = partida.cpus.get(f.slot)
         if cpu is not None:                                       # medidor da CPU no HUD
             from game.ai import NIVEIS
@@ -669,6 +687,31 @@ def desenhar_hud(surf, partida, fontes, tempo):
 from game.modelo import desenhar_lutador  # noqa: E402,F811
 # sprites (imagens) para quem tiver pasta em assets/sprites; os outros usam o manequim
 from game.sprites import desenhar_lutador, desenhar_retrato  # noqa: E402,F811
+
+
+# ============================================================== icone de recarga
+def _icone_cd(surf, c, frac, cor, rotulo, fontes, tempo):
+    """Circulo que se enche enquanto o especial recarrega; brilha quando pronto."""
+    r = 15
+    pygame.draw.circle(surf, (14, 10, 18), c, r + 3)
+    if frac <= 0:
+        pulso = 0.7 + 0.3 * math.sin(tempo * 0.15)
+        glow(surf, escurecer(cor, 0.45 * pulso), c, 30, 0.9)
+        pygame.draw.circle(surf, cor, c, r)
+        pygame.draw.circle(surf, clarear(cor, 0.6), c, r, 2)
+        texto(surf, rotulo, fontes["mini"], (20, 14, 22), c, contorno=0)
+        return
+    pygame.draw.circle(surf, (50, 42, 56), c, r)
+    pronto = 1.0 - frac                                     # parte ja recarregada
+    if pronto > 0.01:
+        pts = [c]
+        passos = max(2, int(36 * pronto))
+        for i in range(passos + 1):
+            a = -math.pi / 2 + math.tau * pronto * i / passos
+            pts.append((c[0] + math.cos(a) * r, c[1] + math.sin(a) * r))
+        pygame.draw.polygon(surf, escurecer(cor, 0.75), pts)
+    pygame.draw.circle(surf, (110, 100, 120), c, r, 2)
+    texto(surf, rotulo, fontes["mini"], (230, 225, 235), c, contorno=1)
 
 
 # ============================================================== medidor de dificuldade

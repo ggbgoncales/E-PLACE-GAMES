@@ -65,6 +65,7 @@ class Character:
     max_projeteis: int = 1
     max_minas: int = 0
     antiaereo: str = None               # botao do golpe antiaereo (para a IA)
+    cooldown: dict = field(default_factory=dict)   # especial -> segundos de recarga
     arma: bool = False                  # desenha uma lanca (Roxo)
     ia: dict = field(default_factory=dict)
 
@@ -87,6 +88,9 @@ def golpes_basicos(dano=1.0, alcance=0, lento=0, whiff=0):
         "rasteira": Move("Rasteira", 34 + s * 2, [
             Hit(11 + s, 14 + s, (10, 0, 80 + alcance, 28), 7 * dano, "low",
                 knockdown=True, knockback=5, blockstun=12)], agachado=True, whiff_extra=whiff),
+        "arremesso": Move("Arremesso", 30, [
+            Hit(4, 6, (15, 40, 70, 130), 11, "mid", grab=True, knockdown=True, knockback=11)],
+            whiff_extra=12, pose="agarrao"),
         "aereo": Move("Chute Aereo", 30, [
             Hit(5, 22, (5, -15, 65 + alcance // 2, 55), 7 * dano, "overhead",
                 hitstun=18, blockstun=12, knockback=4)], aereo=True),
@@ -143,14 +147,14 @@ def criar_azul():
 def criar_amarelo():
     g = golpes_basicos(dano=1.1)
     g["especial1"] = Move("Disparo Alto", 30, [], pose="tiro",
-                          spawn=projetil(9, 13, 11, "high", 125, 40, 24, (255, 220, 60), "raio"))
+                          spawn=projetil(9, 13, 15, "high", 125, 40, 24, (255, 220, 60), "raio"))
     g["especial2"] = Move("Disparo Rasteiro", 32, [], pose="tiro", agachado=True,
-                          spawn=projetil(10, 8, 13, "low", 2, 46, 26, (255, 170, 40), "raio"))
+                          spawn=projetil(10, 9, 15, "low", 2, 46, 26, (255, 170, 40), "raio"))
     return Character("amarelo", "FAISCA", "O Zoner",
                      "Projeteis altos e baixos. Corpo a corpo fraco.",
-                     (230, 200, 40), 1120, 4.1, -18.0, 4.6, 10, 10, g,
+                     (230, 200, 40), 1180, 4.1, -18.0, 4.6, 10, 10, g,
                      max_projeteis=3,
-                     ia={"dist": 420, "recua": 0.45, "tiro": 0.035})
+                     ia={"dist": 360, "recua": 0.55, "tiro": 0.035})
 
 
 # ---------------------------------------------------------------------------
@@ -177,7 +181,7 @@ def criar_verde():
 # 5) ROXO - O Mid-Range (arma longa)
 # ---------------------------------------------------------------------------
 def criar_roxo():
-    g = golpes_basicos(alcance=45, whiff=10)
+    g = golpes_basicos(dano=0.9, alcance=45, whiff=10)
     g["especial1"] = Move("Estocada Longa", 52, [
         Hit(16, 20, (20, 105, 230, 26), 13, "mid", knockback=10, hitstun=20)],
         whiff_extra=26)
@@ -186,7 +190,7 @@ def criar_roxo():
         agachado=True, whiff_extra=26)
     return Character("roxo", "LANCEIRO", "O Mid-Range",
                      "Longo alcance, mas pune muito se errar.",
-                     (140, 60, 200), 980, 3.6, -17.5, 4.5, 10, 10, g,
+                     (140, 60, 200), 920, 3.6, -17.5, 4.5, 10, 10, g,
                      arma=True,
                      ia={"dist": 200, "recua": 0.40, "tiro": 0.02})
 
@@ -302,5 +306,23 @@ def _ajustar_alcance(ch, cap=1.6):
     return ch
 
 
-PERSONAGENS = [_ajustar_alcance(_acelerar(c)) for c in (criar_vermelho(), criar_azul(), criar_amarelo(),
+# ---------------------------------------------------------------------------
+# Recarga (cooldown) dos especiais, em segundos
+# ---------------------------------------------------------------------------
+COOLDOWNS = {
+    "vermelho": {"especial1": 2.0, "especial2": 3.0},
+    "azul":     {"especial1": 4.5, "especial2": 4.5},
+    "amarelo":  {"especial1": 0.9, "especial2": 0.9},
+    "verde":    {"especial1": 1.8, "especial2": 2.4},
+    "roxo":     {"especial1": 3.4, "especial2": 4.0},
+    "preto":    {"especial1": 3.0, "especial2": 1.0},
+}
+
+
+def _cooldown(ch):
+    ch.cooldown = dict(COOLDOWNS.get(ch.key, {"especial1": 2.5, "especial2": 2.5}))
+    return ch
+
+
+PERSONAGENS = [_cooldown(_ajustar_alcance(_acelerar(c))) for c in (criar_vermelho(), criar_azul(), criar_amarelo(),
                                       criar_verde(), criar_roxo(), criar_preto())]

@@ -242,7 +242,7 @@ class App:
         texto(self.tela, "CONTROLES", self.fontes["grande"], (240, 60, 45), (LARGURA // 2, 62))
         linhas = [("Andar", "esquerda", "direita"), ("Pular", "cima", None), ("Agachar", "baixo", None),
                   ("Soco", "soco", None), ("Chute", "chute", None), ("Especial 1", "especial1", None),
-                  ("Especial 2", "especial2", None), ("Dash", "dash", None)]
+                  ("Especial 2", "especial2", None), ("Dash (ou toque duplo)", "dash", None)]
         texto(self.tela, "JOGADOR 1", self.fontes["media"], (255, 90, 80), (640, 128))
         texto(self.tela, "JOGADOR 2", self.fontes["media"], (90, 170, 255), (960, 128))
         for i, (nome, a, b) in enumerate(linhas):
@@ -257,9 +257,9 @@ class App:
                 if b:
                     k += " / " + CONTROLES[slot][b].upper()
                 texto(self.tela, k, self.fontes["media"], (230, 225, 235), (col, y))
-        dicas = ["DEFENDER: segure para TRAS (agachado + tras defende golpe BAIXO)",
-                 "COMBO: acerte um soco/chute e aperte um ESPECIAL logo em seguida (soco -> chute tambem emenda)",
-                 "COUNTER: acertar o oponente no meio do golpe dele causa mais dano",
+        dicas = ["DEFENDER: segure para TRAS (agachado + tras defende BAIXO)  -  defender demais QUEBRA a guarda",
+                 "ARREMESSO: SOCO + CHUTE juntos, colado no oponente (nao da para defender)",
+                 "COMBO: acerte soco/chute e aperte um ESPECIAL logo depois  -  especiais tem RECARGA (icones no HUD)",
                  "ESC na luta = pausa   |   F1 = mostrar hitboxes"]
         for i, d in enumerate(dicas):
             texto(self.tela, d, self.fontes["pequena"], (255, 215, 150) if i < 3 else (200, 190, 200),
@@ -574,6 +574,10 @@ class App:
                 P.faiscas(x, y, (200, 230, 255), n=8, vel=5)
             elif tipo == "tiro":
                 self.sons.tocar("tiro", 0.7)
+            elif tipo == "guarda":
+                P.texto("GUARDA QUEBRADA!", x, y, (120, 200, 255))
+                self.tremor.add(10)
+                self.sons.tocar("forte")
         p.combate.eventos.clear()
 
         for f in (p.f1, p.f2):

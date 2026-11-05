@@ -5,63 +5,59 @@ import json
 import math
 import random
 from pathlib import Path
-
 import pygame
-
 from settings import WIDTH, HEIGHT, FPS, TITLE, GRAVITY, FLAP_FORCE, PIPE_SPEED, PIPE_GAP, SAVE_FILE
-
 pygame.mixer.pre_init(44100, -16, 2, 512)
 pygame.init()
 Vec=pygame.Vector2
 WHITE=(250,252,255); INK=(20,36,58); SKY=(69,190,242); BLUE=(35,126,222)
 CYAN=(55,236,239); YELLOW=(255,213,55); ORANGE=(255,130,45); GREEN=(53,196,104)
 DARK_GREEN=(18,119,67); RED=(245,76,91); PINK=(255,100,176); PURPLE=(132,92,246)
-
 # Tela cheia: o jogo desenha em "screen" (480x720) e e ampliado para o monitor
-display=pygame.display.set_mode(pygame.display.get_desktop_sizes()[0],pygame.NOFRAME)
+# Tela cheia sem borda: o cenario ocupa a largura toda do monitor
+DW,DH=pygame.display.get_desktop_sizes()[0]
+display=pygame.display.set_mode((DW,DH),pygame.NOFRAME)
+WIDTH=max(480,int(HEIGHT*DW/DH))   # largura logica proporcional ao monitor
+OX=(WIDTH-480)//2                  # deslocamento para centralizar menus/paineis
 screen=pygame.Surface((WIDTH,HEIGHT))
 def present():
-    dw,dh=display.get_size(); esc=min(dw/WIDTH,dh/HEIGHT)
-    img=pygame.transform.smoothscale(screen,(int(WIDTH*esc),int(HEIGHT*esc)))
-    display.fill((10,28,45)); display.blit(img,img.get_rect(center=(dw//2,dh//2)))
+    if (WIDTH,HEIGHT)==(DW,DH): display.blit(screen,(0,0))
+    else: pygame.transform.scale(screen,(DW,DH),display)
     pygame.display.flip()
 pygame.display.set_caption(TITLE)
 clock=pygame.time.Clock()
 def make_font(size,bold=True):
-    """Fonte limpa e legivel (Linux e Windows)."""
-    for name in ("ubuntu","notosans","dejavusans","liberationsans","arial","verdana"):
+    """Fonte grossa e bem legivel (prioriza Windows)."""
+    for name in ("segoeui","segoeuisemibold","verdana","tahoma","arial","dejavusans"):
         path=pygame.font.match_font(name,bold=bold)
         if path: return pygame.font.Font(path,size)
     return pygame.font.Font(None,int(size*1.35))
-FONT_BIG=make_font(50)
-FONT_TITLE=make_font(30)
-FONT=make_font(22)
-SMALL=make_font(17)
-TINY=make_font(14)
-
-
+FONT_BIG=make_font(58)
+FONT_TITLE=make_font(34)
+FONT=make_font(24)
+SMALL=make_font(19)
+TINY=make_font(16)
 def clamp(v,a,b): return max(a,min(b,v))
-
 def text(surf,value,font,color,pos,anchor="topleft",shadow=True):
     img=font.render(str(value),True,color); rect=img.get_rect(); setattr(rect,anchor,pos)
     if shadow:
         # contorno escuro em volta das letras (bem mais legivel que sombra deslocada)
+        # texto claro -> contorno escuro | texto escuro -> sem contorno (fica nitido)
+        if sum(color[:3])<300: shadow=False
+    if shadow:
         sh=font.render(str(value),True,(9,25,40))
         for ox,oy in ((-2,0),(2,0),(0,-2),(0,2),(-1,-1),(1,-1),(-1,1),(1,1),(2,2)):
             sr=sh.get_rect(); setattr(sr,anchor,(pos[0]+ox,pos[1]+oy)); surf.blit(sh,sr)
     surf.blit(img,rect); return rect
-
 def panel(surf,rect,fill=(255,255,255,220),border=(255,255,255,245),radius=18):
     layer=pygame.Surface(rect.size,pygame.SRCALPHA)
     pygame.draw.rect(layer,fill,layer.get_rect(),border_radius=radius)
     pygame.draw.rect(layer,border,layer.get_rect(),2,border_radius=radius)
     surf.blit(layer,rect.topleft)
-
 def glow(surf,color,pos,r):
     layer=pygame.Surface((r*6,r*6),pygame.SRCALPHA); c=r*3
     for i in range(4,0,-1): pygame.draw.circle(layer,(*color,10+i*6),(c,c),r+i*r//2)
     surf.blit(layer,(pos[0]-c,pos[1]-c),special_flags=pygame.BLEND_ADD)
-
 class SaveData:
     def __init__(self):
         self.path=Path(SAVE_FILE)
@@ -72,7 +68,6 @@ class SaveData:
     def save(self):
         try: self.path.write_text(json.dumps(self.data,indent=2),encoding="utf-8")
         except Exception: pass
-
 class Particle:
     def __init__(self,pos,vel,color,life,size,kind="circle"):
         self.pos=Vec(pos); self.vel=Vec(vel); self.color=color; self.life=life; self.max=life; self.size=size; self.kind=kind
@@ -87,7 +82,6 @@ class Particle:
                 pts.append((self.pos.x+math.cos(ang)*rad,self.pos.y+math.sin(ang)*rad))
             pygame.draw.polygon(surf,self.color,pts)
         else: pygame.draw.circle(surf,self.color,self.pos,s)
-
 class Cloud:
     def __init__(self,x=None):
         self.x=x if x is not None else random.randrange(WIDTH); self.y=random.randrange(70,470); self.speed=random.uniform(8,24); self.scale=random.uniform(.6,1.35)
@@ -99,7 +93,6 @@ class Cloud:
         layer=pygame.Surface((130,65),pygame.SRCALPHA)
         pygame.draw.ellipse(layer,c,(10,30,105,27)); pygame.draw.circle(layer,c,(42,31),23); pygame.draw.circle(layer,c,(73,24),29); pygame.draw.circle(layer,c,(99,34),19)
         layer=pygame.transform.smoothscale(layer,(int(130*k),int(65*k))); s.blit(layer,(x,y))
-
 class Pipe:
     def __init__(self,x,gap_y):
         self.x=x; self.gap_y=gap_y; self.base_gap_y=gap_y; self.passed=False; self.w=82
@@ -123,10 +116,9 @@ class Pipe:
         pygame.draw.rect(surf,(27,160,80),cap,border_radius=7); pygame.draw.rect(surf,(85,230,126),(cap.x+8,cap.y+4,cap.w-25,cap.h-8),border_radius=5); pygame.draw.rect(surf,(9,83,44),cap,4,border_radius=7)
     def draw(self,surf,gap):
         a,b=self.rects(gap); self.draw_one(surf,a,True); self.draw_one(surf,b,False)
-
 class Bird:
     def __init__(self,hat,effect,skin="gold"):
-        self.pos=Vec(140,HEIGHT*.43); self.vel=0; self.radius=18; self.angle=0; self.hat=hat; self.effect=effect; self.skin=skin; self.anim=0
+        self.pos=Vec(max(140,WIDTH*.25),HEIGHT*.43); self.vel=0; self.radius=18; self.angle=0; self.hat=hat; self.effect=effect; self.skin=skin; self.anim=0
     def flap(self): self.vel=FLAP_FORCE
     def update(self,dt):
         self.anim+=dt; self.vel+=GRAVITY*dt; self.pos.y+=self.vel*dt; self.angle=clamp(-self.vel*.075-8,-72,26)
@@ -163,14 +155,13 @@ class Bird:
         self.draw_hat(bird,x,y)
         bird=pygame.transform.rotate(bird,self.angle)
         surf.blit(bird,bird.get_rect(center=self.pos))
-
 class Game:
     HATS=[("none","Sem chapéu",0),("cap","Boné",25),("tophat","Cartola",60),("crown","Coroa",120),("wizard","Mago",180),("pirate","Pirata",220),("halo","Aurora",260),("headphones","Headset",300)]
     EFFECTS=[("classic","Clássico",0),("spark","Faíscas",50),("rainbow","Arco-íris",100),("stars","Estrelas",160),("fire","Fogo",220),("ice","Gelo",260)]
     SKINS=[("gold","Dourado",0),("blue","Azul celeste",80),("rose","Rosa",100),("mint","Menta",130),("night","Noturno",200)]
     def __init__(self):
         self.save=SaveData(); self.state="menu"; self.menu_idx=0; self.shop_tab=0; self.shop_idx=0; self.streak=0
-        self.clouds=[Cloud() for _ in range(7)]; self.particles=[]; self.reset()
+        self.clouds=[Cloud() for _ in range(max(7,WIDTH//90))]; self.particles=[]; self.reset()
     def reset(self):
         self.bird=Bird(self.save.data["hat"],self.save.data["effect"],self.save.data.get("skin","gold")); self.pipes=[]; self.score=0; self.started=False; self.spawn=0; self.speed=PIPE_SPEED; self.gap=PIPE_GAP; self.flash=0
     def emit(self,amount=7):
@@ -182,18 +173,64 @@ class Game:
         if self.state=="play":
             if not self.started: self.started=True
             self.bird.flap(); self.emit(10 if self.bird.effect!="classic" else 5)
-    def background(self):
-        # rich vertical sky gradient
+    def build_scenery(self):
+        """Pre-desenha as camadas do cenario (rapido e com rolagem infinita)."""
+        rnd=random.Random(7)
+        # ceu em degrade
+        self.sky=pygame.Surface((WIDTH,HEIGHT))
         for y in range(HEIGHT):
-            t=y/HEIGHT; col=(int(58+65*t),int(178+40*t),int(239+10*t)); pygame.draw.line(screen,col,(0,y),(WIDTH,y))
-        glow(screen,(255,232,130),(390,105),55); pygame.draw.circle(screen,(255,239,157),(390,105),34)
+            t=y/HEIGHT; pygame.draw.line(self.sky,(int(58+70*t),int(170+48*t),int(240+10*t)),(0,y),(WIDTH,y))
+        halo=pygame.Surface((300,300),pygame.SRCALPHA)
+        for r,a in ((140,25),(110,35),(80,50),(58,70)): pygame.draw.circle(halo,(255,240,180,a),(150,150),r)
+        self.sky.blit(halo,(WIDTH-320,-30)); pygame.draw.circle(self.sky,(255,240,160),(WIDTH-170,120),38)
+        L=WIDTH  # cada camada tem a largura da tela e se repete
+        # montanhas distantes
+        self.mount=pygame.Surface((L,HEIGHT),pygame.SRCALPHA); pts=[(0,HEIGHT)]; x=0
+        while x<=L:
+            pts.append((x,rnd.randint(380,470))); x+=rnd.randint(90,170)
+        pts[-1]=(L,pts[1][1]); pts.append((L,HEIGHT)); pygame.draw.polygon(self.mount,(128,170,214),pts)
+        for k in range(1,len(pts)-2):
+            px,py=pts[k]
+            if py<410: pygame.draw.polygon(self.mount,(235,244,252),[(px,py),(px-22,py+26),(px+22,py+26)])
+        # cidade
+        self.city=pygame.Surface((L,HEIGHT),pygame.SRCALPHA); x=0
+        while x<L-40:
+            w=rnd.randint(34,70); h=rnd.randint(70,190); y=600-h
+            pygame.draw.rect(self.city,(96,140,176),(x,y,w,h+60)); pygame.draw.rect(self.city,(82,124,160),(x,y,w,h+60),2)
+            for wy in range(y+10,600,18):
+                for wx in range(x+7,x+w-8,13):
+                    if rnd.random()<.6: pygame.draw.rect(self.city,(170,214,240),(wx,wy,6,8))
+            x+=w+rnd.randint(4,18)
+        # morros com arvores
+        self.hills=pygame.Surface((L,HEIGHT),pygame.SRCALPHA); n=max(2,round(L/320)); seg=L/n
+        for k in range(n):
+            bx=k*seg
+            pygame.draw.ellipse(self.hills,(70,170,110),(bx-60,560,seg+120,190))
+        for k in range(n*5):
+            tx=rnd.randint(0,L); ty=rnd.randint(585,615)
+            pygame.draw.rect(self.hills,(110,72,40),(tx-4,ty,8,26))
+            pygame.draw.circle(self.hills,(40,140,80),(tx,ty-6),20); pygame.draw.circle(self.hills,(58,170,95),(tx-6,ty-12),12)
+        # chao
+        self.ground=pygame.Surface((L,68))
+        pygame.draw.rect(self.ground,(209,181,91),(0,12,L,56)); pygame.draw.rect(self.ground,(112,204,95),(0,0,L,18)); pygame.draw.rect(self.ground,(47,135,71),(0,0,L,6))
+        for x in range(0,L,32):
+            pygame.draw.polygon(self.ground,(90,185,80),[(x,18),(x+16,18),(x+8,10)])
+            pygame.draw.ellipse(self.ground,(232,205,112),(x,32,24,8))
+        self.scroll=0
+    def blit_layer(self,surf,y,speed):
+        off=int(self.scroll*speed)%WIDTH
+        screen.blit(surf,(-off,y)); screen.blit(surf,(WIDTH-off,y))
+    def background(self):
+        if not hasattr(self,"sky"): self.build_scenery()
+        screen.blit(self.sky,(0,0))
+        self.blit_layer(self.mount,0,.08)
         for c in self.clouds: c.draw(screen)
-        # distant hills
-        pygame.draw.polygon(screen,(74,174,137),[(0,590),(60,520),(125,575),(195,505),(275,575),(350,520),(480,580),(480,720),(0,720)])
-        pygame.draw.polygon(screen,(55,151,113),[(0,626),(76,565),(153,622),(242,550),(337,620),(418,568),(480,615),(480,720),(0,720)])
-        pygame.draw.rect(screen,(209,181,91),(0,664,WIDTH,56)); pygame.draw.rect(screen,(112,204,95),(0,652,WIDTH,18)); pygame.draw.rect(screen,(47,135,71),(0,652,WIDTH,6))
-        for x in range(0,WIDTH,32): pygame.draw.ellipse(screen,(232,205,112),(x,684,24,8))
+        self.blit_layer(self.city,0,.2)
+        self.blit_layer(self.hills,0,.45)
+        self.blit_layer(self.ground,652,1)
     def update_common(self,dt):
+        if not hasattr(self,"scroll"): self.scroll=0
+        if self.state!="over": self.scroll+=(self.speed if self.state=="play" and self.started else 90)*dt
         for c in self.clouds: c.update(dt)
         self.particles=[p for p in self.particles if p.update(dt)]
     def update_play(self,dt):
@@ -202,7 +239,7 @@ class Game:
         self.bird.update(dt); self.spawn-=dt
         self.speed=PIPE_SPEED+min(125,self.score*3.0); self.gap=max(118,PIPE_GAP-self.score*.85)
         if self.spawn<=0:
-            pipe=Pipe(WIDTH+40,random.randint(190,485)); pipe.motion=min(34,max(0,self.score-6)*2.5); self.pipes.append(pipe); self.spawn=max(1.16,1.43-self.score*.008)
+            pipe=Pipe(WIDTH+40 if self.pipes or self.score else min(WIDTH+40,self.bird.pos.x+560),random.randint(190,485)); pipe.motion=min(34,max(0,self.score-6)*2.5); self.pipes.append(pipe); self.spawn=max(1.16,1.43-self.score*.008)
         self.pipes=[p for p in self.pipes if p.update(dt,self.speed)]
         if self.bird.effect!="classic" and random.random()<.55: self.emit(1)
         for p in self.pipes:
@@ -222,10 +259,10 @@ class Game:
         text(screen,"FLAPPY",FONT_BIG,WHITE,(WIDTH//2,85),"center")
         text(screen,"BIRD",FONT_BIG,YELLOW,(WIDTH//2,137),"center")
         text(screen,"SKYWARD EDITION",SMALL,WHITE,(WIDTH//2,181),"center")
-        panel(screen,pygame.Rect(75,365,330,190),(10,35,58,205),(255,255,255,90))
+        panel(screen,pygame.Rect(OX+75,365,330,190),(10,35,58,205),(255,255,255,90))
         items=("JOGAR","CUSTOMIZAR","SAIR")
         for i,item in enumerate(items):
-            r=pygame.Rect(104,389+i*51,272,40)
+            r=pygame.Rect(OX+104,389+i*51,272,40)
             if i==self.menu_idx: pygame.draw.rect(screen,(255,198,45),r,border_radius=12); pygame.draw.rect(screen,WHITE,r,2,border_radius=12)
             text(screen,item,FONT,INK if i==self.menu_idx else WHITE,r.center,"center")
         pygame.draw.circle(screen,YELLOW,(34,34),16); text(screen,self.save.data["coins"],SMALL,WHITE,(58,34),"midleft")
@@ -240,16 +277,16 @@ class Game:
         text(screen,f"NÍVEL {level}",TINY,WHITE,(18,24))
         if self.score>=6: text(screen,"CANOS MÓVEIS",TINY,YELLOW,(WIDTH-18,24),"topright")
         if not self.started:
-            panel(screen,pygame.Rect(95,395,290,86),(7,34,55,185),(255,255,255,80))
+            panel(screen,pygame.Rect(OX+80,395,320,86),(7,34,55,185),(255,255,255,80))
             text(screen,"ESPAÇO PARA VOAR",FONT,WHITE,(WIDTH//2,423),"center"); text(screen,"Passe pelos canos e ganhe moedas",TINY,WHITE,(WIDTH//2,458),"center")
     def draw_over(self):
         self.draw_play(); shade=pygame.Surface((WIDTH,HEIGHT),pygame.SRCALPHA); shade.fill((4,18,35,135)); screen.blit(shade,(0,0))
-        panel(screen,pygame.Rect(62,185,356,300),(248,252,255,240),(255,255,255,255))
+        panel(screen,pygame.Rect(OX+62,185,356,300),(248,252,255,240),(255,255,255,255))
         text(screen,"FIM DE JOGO",FONT_TITLE,INK,(WIDTH//2,220),"center")
-        pygame.draw.circle(screen,YELLOW,(150,305),47); text(screen,self.score,FONT_TITLE,INK,(150,303),"center"); text(screen,"PONTOS",TINY,INK,(150,342),"center",False)
-        pygame.draw.circle(screen,CYAN,(330,305),47); text(screen,self.save.data["best"],FONT_TITLE,INK,(330,303),"center"); text(screen,"RECORDE",TINY,INK,(330,342),"center",False)
+        pygame.draw.circle(screen,YELLOW,(OX+150,305),47); text(screen,self.score,FONT_TITLE,INK,(OX+150,303),"center"); text(screen,"PONTOS",TINY,INK,(OX+150,342),"center",False)
+        pygame.draw.circle(screen,CYAN,(OX+330,305),47); text(screen,self.save.data["best"],FONT_TITLE,INK,(OX+330,303),"center"); text(screen,"RECORDE",TINY,INK,(OX+330,342),"center",False)
         text(screen,f"+ {self.score} MOEDAS",SMALL,ORANGE,(WIDTH//2,382),"center")
-        pygame.draw.rect(screen,YELLOW,(111,416,258,44),border_radius=13); text(screen,"JOGAR NOVAMENTE",FONT,INK,(240,437),"center")
+        pygame.draw.rect(screen,YELLOW,(OX+96,416,288,44),border_radius=13); text(screen,"JOGAR NOVAMENTE",FONT,INK,(OX+240,437),"center")
         text(screen,"ESC para o menu",TINY,INK,(WIDTH//2,472),"center",False)
     def current_shop(self): return self.HATS if self.shop_tab==0 else (self.EFFECTS if self.shop_tab==1 else self.SKINS)
     def draw_shop_preview(self,item_id):
@@ -258,11 +295,11 @@ class Game:
         if self.shop_tab==1:
             old=self.bird; self.bird=preview; self.emit(2); self.bird=old
     def draw_shop(self):
-        self.background(); panel(screen,pygame.Rect(24,26,432,650),(8,30,52,225),(255,255,255,100))
+        self.background(); panel(screen,pygame.Rect(OX+24,26,432,650),(8,30,52,225),(255,255,255,100))
         text(screen,"CUSTOMIZAÇÃO",FONT_TITLE,WHITE,(WIDTH//2,59),"center")
         tabs=("CHAPÉUS","EFEITOS","CORES")
         for i,name in enumerate(tabs):
-            r=pygame.Rect(38+i*136,91,128,38); pygame.draw.rect(screen,YELLOW if i==self.shop_tab else (25,65,89),r,border_radius=10); text(screen,name,SMALL,INK if i==self.shop_tab else WHITE,r.center,"center")
+            r=pygame.Rect(OX+38+i*136,91,128,38); pygame.draw.rect(screen,YELLOW if i==self.shop_tab else (25,65,89),r,border_radius=10); text(screen,name,SMALL,INK if i==self.shop_tab else WHITE,r.center,"center")
         items=self.current_shop(); item_id,name,price=items[self.shop_idx]; self.draw_shop_preview(item_id)
         text(screen,name,FONT_TITLE,WHITE,(WIDTH//2,310),"center")
         owned_key="owned_hats" if self.shop_tab==0 else ("owned_effects" if self.shop_tab==1 else "owned_skins")
@@ -270,13 +307,13 @@ class Game:
         owned=item_id in self.save.data[owned_key]
         selected=item_id==self.save.data[select_key]
         status="EQUIPADO" if selected else ("EQUIPAR" if owned else f"COMPRAR  {price}")
-        pygame.draw.rect(screen,YELLOW,(100,349,280,46),border_radius=14); text(screen,status,FONT,INK,(240,372),"center")
+        pygame.draw.rect(screen,YELLOW,(OX+100,349,280,46),border_radius=14); text(screen,status,FONT,INK,(OX+240,372),"center")
         start=max(0,min(self.shop_idx-2,len(items)-5))
         for row,i in enumerate(range(start,min(len(items),start+5))):
             _,label,cost=items[i]; y=426+row*40; active=i==self.shop_idx
-            if active: pygame.draw.rect(screen,(32,108,145),(58,y-5,364,34),border_radius=9)
-            text(screen,label,SMALL,WHITE,(78,y+4)); text(screen,"GRÁTIS" if cost==0 else cost,SMALL,YELLOW,(397,y+4),"topright")
-        pygame.draw.circle(screen,YELLOW,(50,650),14); text(screen,self.save.data["coins"],SMALL,WHITE,(72,650),"midleft"); text(screen,"ESC VOLTAR",TINY,WHITE,(WIDTH-44,650),"midright")
+            if active: pygame.draw.rect(screen,(32,108,145),(OX+58,y-5,364,34),border_radius=9)
+            text(screen,label,SMALL,WHITE,(OX+78,y+2)); text(screen,"GRÁTIS" if cost==0 else cost,SMALL,YELLOW,(OX+397,y+2),"topright")
+        pygame.draw.circle(screen,YELLOW,(OX+50,650),14); text(screen,self.save.data["coins"],SMALL,WHITE,(OX+72,650),"midleft"); text(screen,"ESC VOLTAR",TINY,WHITE,(OX+436,650),"midright")
     def buy_or_equip(self):
         items=self.current_shop(); item_id,_,price=items[self.shop_idx]; owned_key="owned_hats" if self.shop_tab==0 else ("owned_effects" if self.shop_tab==1 else "owned_skins"); sel="hat" if self.shop_tab==0 else ("effect" if self.shop_tab==1 else "skin")
         if item_id in self.save.data[owned_key]: self.save.data[sel]=item_id

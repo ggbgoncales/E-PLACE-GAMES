@@ -81,9 +81,11 @@ class CPU:
         self.dash_cd -= 1
         self.ameaca_cd -= 1
 
+        final = COMBO_FINAL.get(f.char.key, "chute")
         if (f.estado == "attack" and f.golpe_acertou and f.golpe and f.golpe.hits
-                and op.estado == "hitstun" and r.random() < self.cfg["combo"]):
-            c.apertou.add(COMBO_FINAL.get(f.char.key, "chute"))  # emenda combo
+                and op.estado == "hitstun" and r.random() < self.cfg["combo"]
+                and f.cd.get(final, 0) <= 0):
+            c.apertou.add(final)                                    # emenda combo
             return c
         if f.estado == "blockstun":                     # continua defendendo
             self._segurar(c, -frente)
@@ -102,7 +104,8 @@ class CPU:
         ameaca = self._ameaca(op, combate, dist)
         if ameaca and self.ameaca_cd <= 0:
             self.ameaca_cd = self.cfg["reacao"]
-            if ameaca == "aereo" and f.char.antiaereo and r.random() < self.cfg["antiaereo"]:
+            if (ameaca == "aereo" and f.char.antiaereo and r.random() < self.cfg["antiaereo"]
+                    and f.cd.get(f.char.antiaereo, 0) <= 0):
                 c.apertou.add(f.char.antiaereo)
                 self._ir("IDLE", 10)
                 return c
@@ -178,7 +181,10 @@ class CPU:
             else:
                 self._ir("RETREAT", 25)
             return
-        c.apertou.add(botao)
+        if botao == "arremesso":
+            c.apertou.update(("soco", "chute"))
+        else:
+            c.apertou.add(botao)
         c.baixo = baixo
         if self.rng.random() < self.f.char.ia["recua"]:
             self._ir("RETREAT", self.rng.randint(20, 45))
@@ -192,6 +198,22 @@ class CPU:
 
     # ------------------------------------------------------------------ golpes
     def _escolher_ataque(self, op, combate, dist):
+        f, r = self.f, self.rng
+        # contra quem fica so defendendo de perto: arremesso
+        if (dist < 100 and op.no_chao and op.estado in ("blockstun", "crouch", "idle")
+                and (op.segurando_tras or op.estado == "blockstun") and r.random() < 0.3 + 0.08 * self.nivel):
+            return "arremesso", False
+        botao, baixo = self._escolher_base(op, combate, dist)
+        if botao in ("especial1", "especial2") and f.cd.get(botao, 0) > 0:   # recarregando
+            outro = "especial2" if botao == "especial1" else "especial1"
+            if f.cd.get(outro, 0) <= 0 and r.random() < 0.3 and f.pode_usar(outro, combate):
+                return outro, False
+            if dist < 120:
+                return r.choice(NORMAIS)
+            return None, False
+        return botao, baixo
+
+    def _escolher_base(self, op, combate, dist):
         f, r = self.f, self.rng
         k = f.char.key
         x = r.random()
