@@ -18,6 +18,7 @@ Controles:
 import math
 import random
 import sys
+import json
 from array import array
 
 try:
@@ -25,6 +26,24 @@ try:
 except ImportError:
     print("Pygame nao encontrado. Instale com: pip install pygame")
     raise
+
+# Recorde persistente compartilhado com o launcher E-PLACE.
+BASE_GAME_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+HIGHSCORE_FILE = os.path.join(BASE_GAME_DIR, "highscore.json")
+
+def carregar_recorde():
+    try:
+        with open(HIGHSCORE_FILE, "r", encoding="utf-8") as arquivo:
+            return max(0, int(json.load(arquivo).get("recorde", 0)))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return 0
+
+def salvar_recorde(valor):
+    try:
+        with open(HIGHSCORE_FILE, "w", encoding="utf-8") as arquivo:
+            json.dump({"recorde": int(valor)}, arquivo, indent=2)
+    except OSError as erro:
+        print("Nao foi possivel salvar o recorde:", erro)
 
 # ----------------------------- CONFIGURACAO -----------------------------
 WIDTH, HEIGHT = 960, 540
@@ -60,11 +79,24 @@ def present():
     pygame.display.flip()
 clock = pygame.time.Clock()
 
-FONT_BIG = pygame.font.SysFont("arialblack", 68)
-FONT_TITLE = pygame.font.SysFont("arialblack", 38)
-FONT = pygame.font.SysFont("segoeui", 22)
-FONT_SMALL = pygame.font.SysFont("consolas", 16)
-FONT_TINY = pygame.font.SysFont("consolas", 12)
+def fonte_retro(tamanho, titulo):
+    """Titulos em Press Start 2P e textos em VT323 (assets/fonts). Sem os arquivos, usa fonte do sistema."""
+    import os
+    nome = "PressStart2P-Regular.ttf" if titulo else "VT323-Regular.ttf"
+    pasta = os.path.abspath(os.path.dirname(__file__))
+    for _ in range(8):
+        caminho = os.path.join(pasta, "assets", "fonts", nome)
+        if os.path.exists(caminho):
+            return pygame.font.Font(caminho, max(8, int(tamanho)))
+        pasta = os.path.dirname(pasta)
+    return pygame.font.SysFont("arial,helveticaneue,dejavusans", int(tamanho), bold=titulo)
+
+
+FONT_BIG = fonte_retro(40, True)
+FONT_TITLE = fonte_retro(22, True)
+FONT = fonte_retro(28, False)
+FONT_SMALL = fonte_retro(21, False)
+FONT_TINY = fonte_retro(16, False)
 
 
 def clamp(v, lo, hi):
@@ -393,7 +425,7 @@ class Powerup:
 class Game:
     def __init__(self):
         self.stars = Starfield()
-        self.highscore = 0
+        self.highscore = carregar_recorde()
         self.state = "menu"
         self.menu_index = 0
         self.reset()
@@ -482,7 +514,10 @@ class Game:
                 self.floaters.append(FloatingText(p.pos,p.kind.upper(),p.COLORS[p.kind]))
                 self.powerups.remove(p)
         if self.player.hp<=0:
-            self.highscore=max(self.highscore,self.score); self.state="gameover"; play(SND_BOOM)
+            if self.score > self.highscore:
+                self.highscore = self.score
+                salvar_recorde(self.highscore)
+            self.state="gameover"; play(SND_BOOM)
 
     def draw_hud(self,surf):
         panel=pygame.Surface((WIDTH,60),pygame.SRCALPHA); panel.fill((3,8,24,190)); surf.blit(panel,(0,0))

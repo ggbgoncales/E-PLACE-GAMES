@@ -1,6 +1,7 @@
 """
 app.py - telas do jogo (menu, controles, selecao, luta, pausa) + sons e efeitos.
 """
+import json
 import os
 import random
 import sys
@@ -28,6 +29,26 @@ DESC_NIVEL = {
     4: "Reage rapido, defende bem e emenda combos.",
     5: "Sem piedade: defende quase tudo e pune cada erro.",
 }
+
+
+RECORDE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "recorde.json")
+
+
+def carregar_vitorias():
+    """Vitorias do jogador 1 contra a CPU (o 'recorde' do Kombate)."""
+    try:
+        with open(RECORDE_FILE, "r", encoding="utf-8") as arquivo:
+            return max(0, int(json.load(arquivo).get("recorde", 0)))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return 0
+
+
+def salvar_vitorias(valor):
+    try:
+        with open(RECORDE_FILE, "w", encoding="utf-8") as arquivo:
+            json.dump({"recorde": int(valor)}, arquivo)
+    except OSError:
+        pass
 
 
 class App:
@@ -534,6 +555,7 @@ class App:
     def iniciar_luta(self, c1, c2):
         self.chars = (c1, c2)
         self.partida = Partida(c1, c2, cpu1=False, cpu2=self.vs_cpu, nivel=self.nivel)
+        self._vitoria_registrada = False
         self.particulas = Particulas()
         self._fase_ant = None
         self.cena = "luta"
@@ -615,6 +637,10 @@ class App:
     def cena_luta(self, eventos):
         p = self.partida
         teclas = self._teclas(eventos)
+        if p.fase == "fim" and not self._vitoria_registrada:
+            self._vitoria_registrada = True
+            if self.vs_cpu and p.vencedor is p.f1:
+                salvar_vitorias(carregar_vitorias() + 1)
         if p.fase == "fim" and p.fase_t > 30:
             if pygame.K_RETURN in teclas or pygame.K_SPACE in teclas:
                 self.sons.tocar("ok")

@@ -35,12 +35,24 @@ def cor_texto(cor):
     return (190, 170, 230) if sum(cor) < 250 else cor
 
 
+def fonte_retro(tamanho, titulo):
+    """Titulos em Press Start 2P e textos em VT323 (assets/fonts). Sem os arquivos, usa fonte do sistema."""
+    import os
+    nome = "PressStart2P-Regular.ttf" if titulo else "VT323-Regular.ttf"
+    pasta = os.path.abspath(os.path.dirname(__file__))
+    for _ in range(8):
+        caminho = os.path.join(pasta, "assets", "fonts", nome)
+        if os.path.exists(caminho):
+            return pygame.font.Font(caminho, max(8, int(tamanho)))
+        pasta = os.path.dirname(pasta)
+    return pygame.font.SysFont("arial,helveticaneue,dejavusans", int(tamanho), bold=titulo)
+
+
 def make_font(tamanho, bold=True):
-    for nome in ("ubuntu", "notosans", "dejavusans", "liberationsans", "arial", "verdana"):
-        caminho = pygame.font.match_font(nome, bold=bold)
-        if caminho:
-            return pygame.font.Font(caminho, tamanho)
-    return pygame.font.Font(None, int(tamanho * 1.35))
+    """Titulos grandes em Press Start 2P; textos menores em VT323."""
+    if tamanho >= 40:
+        return fonte_retro(round(tamanho * 0.6), True)
+    return fonte_retro(round(tamanho * 1.25), False)
 
 
 _cache_txt = {}

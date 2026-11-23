@@ -1,0 +1,548 @@
+/* Tema E-Place — mesmo visual da documentação anterior: arcade neon sobre fundo azul-noite. */
+:root {
+  --bg: #070817;
+  --panel: #10132b;
+  --panel2: #151a38;
+  --cyan: #18e7ff;
+  --pink: #ff45e6;
+  --purple: #8a5bff;
+  --green: #54ff8b;
+  --text: #f3f5ff;
+  --muted: #a7b0d6;
+  --line: #303864;
+  --glow: 0 0 22px #15dfff22, 0 0 34px #ff45e622;
+
+  --ifm-font-family-base: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --ifm-color-primary: #18e7ff;
+  --ifm-color-primary-dark: #08d6ee;
+  --ifm-color-primary-darker: #08cbe2;
+  --ifm-color-primary-darkest: #06a7bb;
+  --ifm-color-primary-light: #3ceaff;
+  --ifm-color-primary-lighter: #4aecff;
+  --ifm-color-primary-lightest: #7ff1ff;
+  --ifm-background-color: var(--bg);
+  --ifm-background-surface-color: var(--panel);
+  --ifm-font-color-base: #c0c8e7;
+  --ifm-heading-color: var(--text);
+  --ifm-link-color: var(--cyan);
+  --ifm-link-hover-color: #ffffff;
+  --ifm-navbar-background-color: rgba(9, 11, 27, 0.8);
+  --ifm-navbar-height: 66px;
+  --ifm-footer-background-color: #090b1b;
+  --ifm-footer-color: #7580ab;
+  --ifm-toc-border-color: var(--line);
+  --ifm-color-emphasis-300: var(--line);
+  --ifm-table-border-color: #2b3361;
+  --ifm-table-head-background: #151a35;
+  --ifm-table-stripe-background: transparent;
+  --ifm-code-font-size: 92%;
+  --ifm-menu-color: #b8c1e6;
+  --ifm-menu-color-background-active: #131a38;
+  --ifm-menu-color-background-hover: #131a38;
+  --docusaurus-highlighted-code-line-bg: rgba(24, 231, 255, 0.12);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg);
+  color: #c0c8e7;
+}
+
+/* ---------- Topbar ---------- */
+.navbar {
+  border-bottom: 1px solid #20264b;
+  backdrop-filter: blur(12px);
+  box-shadow: none;
+}
+
+.navbar__title {
+  color: var(--text);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  font-size: 15px;
+}
+
+.navbar__logo img {
+  filter: drop-shadow(0 0 10px #18e7ff24);
+}
+
+.navbar__link {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.navbar__link:hover,
+.navbar__link--active {
+  color: var(--cyan);
+}
+
+.eplace-pill {
+  font-size: 11px;
+  border: 1px solid #294e6d;
+  border-radius: 999px;
+  padding: 5px 10px;
+  color: var(--cyan);
+  background: #0d2031;
+  white-space: nowrap;
+}
+
+/* ---------- Sidebar ---------- */
+.theme-doc-sidebar-container {
+  background: #090b1b;
+  border-right: 1px solid var(--line) !important;
+}
+
+.menu {
+  padding: 18px 14px !important;
+  font-size: 13px;
+}
+
+.menu__link {
+  border: 1px solid transparent;
+  border-radius: 9px;
+  padding: 9px 11px;
+  margin: 3px 0;
+  color: #b8c1e6;
+}
+
+.menu__link:hover {
+  color: #fff;
+  background: #131a38;
+  border-color: #27365f;
+}
+
+.menu__link--active:not(.menu__link--sublist) {
+  color: var(--cyan);
+  background: #131a38;
+  border-color: #27365f;
+  box-shadow: inset 3px 0 var(--cyan);
+  font-weight: 600;
+}
+
+.menu__list-item-collapsible,
+.menu__list-item-collapsible:hover {
+  background: transparent;
+}
+
+.menu__link--sublist-caret:after {
+  filter: brightness(1.6);
+}
+
+.theme-doc-sidebar-item-category-level-1 > .menu__list-item-collapsible > .menu__link {
+  font-size: 10px;
+  color: #7782b6;
+  letter-spacing: 2px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+/* ---------- Conteúdo dos documentos ---------- */
+.main-wrapper {
+  background: var(--bg);
+}
+
+.markdown {
+  max-width: 820px;
+}
+
+.markdown > h1:first-child {
+  font-size: 38px;
+  letter-spacing: -1px;
+  line-height: 1.1;
+  margin: 10px 0 18px;
+  background: linear-gradient(90deg, var(--cyan), #7b9bff 48%, var(--pink));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  width: fit-content;
+}
+
+.markdown h2 {
+  margin-top: 35px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--line);
+  font-size: 22px;
+}
+
+.markdown h3 {
+  margin-top: 23px;
+}
+
+.markdown p,
+.markdown li {
+  font-size: 14px;
+  color: #c0c8e7;
+}
+
+.markdown a {
+  font-weight: 600;
+}
+
+.markdown table {
+  display: table;
+  width: 100%;
+  font-size: 14px;
+  border-collapse: collapse;
+}
+
+.markdown table th {
+  background: #151a35;
+  color: var(--cyan);
+  border: 1px solid #2b3361;
+  text-align: left;
+  padding: 9px 12px;
+}
+
+.markdown table td {
+  border: 1px solid #2b3361;
+  padding: 9px 12px;
+  vertical-align: top;
+}
+
+.markdown table tr {
+  background: transparent;
+  border: none;
+}
+
+.markdown img {
+  display: block;
+  width: 100%;
+  max-width: 760px;
+  border: 1px solid #2b3361;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+}
+
+.markdown img[src$='logo.png'] {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  max-width: 280px;
+}
+
+.markdown code {
+  background: #0f1228;
+  border: 1px solid #2c355c;
+  color: #a6f4ff;
+}
+
+pre code,
+.markdown pre code {
+  border: none;
+}
+
+div[class*='codeBlockContainer'] {
+  background: #060817 !important;
+  border: 1px solid #2c355c;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+.markdown blockquote {
+  border-left: 3px solid var(--pink);
+  background: #120f26;
+  color: #e6d3f5;
+  padding: 12px 17px;
+  border-radius: 0 10px 10px 0;
+}
+
+/* Admonições = callouts da documentação anterior */
+.theme-admonition {
+  border: none !important;
+  border-left: 3px solid var(--cyan) !important;
+  background: #0f1a30 !important;
+  border-radius: 0 10px 10px 0 !important;
+  color: #dbeaff !important;
+  font-size: 13px;
+  box-shadow: none !important;
+}
+
+.theme-admonition p,
+.theme-admonition li {
+  color: #dbeaff;
+}
+
+.theme-admonition-tip {
+  border-left-color: var(--green) !important;
+}
+
+.theme-admonition-note {
+  border-left-color: var(--purple) !important;
+}
+
+kbd,
+.eplace-kbd {
+  display: inline-block;
+  border: 1px solid #4c5685;
+  background: #151a35;
+  border-radius: 5px;
+  padding: 2px 7px;
+  font-family: monospace;
+  color: #fff;
+}
+
+.table-of-contents__link {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.table-of-contents__link--active {
+  color: var(--cyan);
+}
+
+.pagination-nav__link {
+  background: linear-gradient(145deg, #121630, #0d1024);
+  border: 1px solid var(--line);
+  border-radius: 15px;
+}
+
+.pagination-nav__link:hover {
+  border-color: var(--cyan);
+  box-shadow: var(--glow);
+}
+
+.breadcrumbs__link {
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.breadcrumbs__item--active .breadcrumbs__link {
+  color: var(--cyan);
+  background: transparent;
+}
+
+/* ---------- Rodapé ---------- */
+.footer {
+  border-top: 1px solid var(--line);
+}
+
+.footer__title {
+  color: #7782b6;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.footer__link-item {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.footer__link-item:hover {
+  color: var(--cyan);
+}
+
+.footer__copyright {
+  font-size: 11px;
+  color: #7580ab;
+}
+
+.footer__logo {
+  filter: drop-shadow(0 0 10px #18e7ff24);
+}
+
+
+/* ======================================================================
+   Layout igual ao da documentação original (sidebar com logo + topbar)
+   ====================================================================== */
+.eplace-crumb {
+  font-size: 12px;
+  color: var(--muted);
+}
+.eplace-crumb b {
+  color: var(--cyan);
+}
+
+.navbar {
+  padding: 0 5%;
+}
+
+.markdown > h1,
+.theme-doc-markdown h1 {
+  font-size: 38px;
+  letter-spacing: -1px;
+  line-height: 1.1;
+  margin: 10px 0 18px;
+  background: linear-gradient(90deg, var(--cyan), #7b9bff 48%, var(--pink));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  width: fit-content;
+}
+
+.eyebrow {
+  color: var(--cyan);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+.markdown p.lead {
+  font-size: 16px;
+  color: #bac3e6;
+  max-width: 760px;
+}
+
+/* Sidebar: logo, busca e rodapé */
+.eplace-side {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 24px 18px 0;
+  overflow-y: auto;
+}
+.eplace-brand {
+  display: block;
+  margin-bottom: 22px;
+  line-height: 0;
+}
+.eplace-brand img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 145px;
+  object-fit: contain;
+  object-position: left center;
+  filter: drop-shadow(0 0 10px #18e7ff24);
+}
+.eplace-search {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #0e1127;
+  color: var(--text);
+  outline: none;
+  margin-bottom: 8px;
+  font: inherit;
+  font-size: 13px;
+}
+.eplace-search:focus {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 3px #18e7ff17;
+}
+.eplace-side > div[class*='sidebar'] {
+  height: auto !important;
+  flex: 1 0 auto;
+  padding: 0 !important;
+}
+.eplace-sidefoot {
+  border-top: 1px solid var(--line);
+  margin-top: 26px;
+  padding: 17px 8px 24px;
+  color: #7782ad;
+  font-size: 11px;
+}
+
+/* Sem elementos que a documentação original não tinha */
+.pagination-nav,
+.theme-doc-breadcrumbs,
+.theme-doc-footer,
+.theme-doc-version-badge {
+  display: none !important;
+}
+
+.footer {
+  background: transparent;
+  border-top: 1px solid var(--line);
+  padding: 20px 5%;
+}
+.footer__copyright {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  color: #7580ab;
+}
+
+@media (min-width: 997px) {
+  /* A sidebar ocupa a altura toda e a topbar começa depois dela */
+  :root {
+    --doc-sidebar-width: 265px !important;
+  }
+  .navbar {
+    position: fixed;
+    left: 265px;
+    width: calc(100% - 265px);
+    top: 0;
+  }
+  [class*='docSidebarContainer'] {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+    width: 265px !important;
+    z-index: 210;
+    margin-top: 0 !important;
+  }
+  [class*='docSidebarContainer'] > div {
+    height: 100vh;
+    position: static;
+    top: 0;
+  }
+  [class*='docMainContainer'] {
+    margin-left: 265px;
+    width: calc(100% - 265px);
+    max-width: calc(100% - 265px);
+    padding-top: 66px;
+  }
+  .footer {
+    margin-left: 265px;
+  }
+}
+
+[class*='docItemContainer'] {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 48px 5% 40px !important;
+}
+[class*='docItemCol'] {
+  max-width: 100% !important;
+}
+.theme-doc-markdown {
+  max-width: 820px;
+}
+.theme-doc-markdown:has(.eplace-overview) {
+  max-width: none;
+}
+
+@media (max-width: 996px) {
+  .eplace-side {
+    padding-top: 12px;
+  }
+  .navbar {
+    padding: 0 16px;
+  }
+}
+
+/* Rótulos dos grupos (COMECE AQUI / MINI-GAMES / PROJETO): texto simples, sem caixa */
+.theme-doc-sidebar-item-category > .menu__list-item-collapsible,
+.theme-doc-sidebar-item-category > .menu__list-item-collapsible:hover {
+  background: transparent !important;
+}
+.theme-doc-sidebar-item-category > .menu__list-item-collapsible > .menu__link,
+.theme-doc-sidebar-item-category > .menu__list-item-collapsible > .menu__link:hover,
+.theme-doc-sidebar-item-category > .menu__list-item-collapsible > .menu__link--active {
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  pointer-events: none;
+  color: #7782b6 !important;
+  font-size: 10px !important;
+  letter-spacing: 2px;
+  font-weight: 800 !important;
+  padding: 0 !important;
+  margin: 20px 10px 4px !important;
+}
+
+/* A documentação original não tinha índice lateral */
+.theme-doc-toc-desktop,
+.theme-doc-toc-mobile,
+[class*='tocCollapsible'] {
+  display: none !important;
+}

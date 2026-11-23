@@ -1,3 +1,6 @@
+import json
+import os
+
 import pygame
 
 from game.entities.ball import Ball
@@ -15,6 +18,26 @@ from settings import (
     SECONDARY_COLOR,
     WINNING_SCORE,
 )
+
+
+RECORDE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "recorde.json")
+
+
+def carregar_vitorias():
+    """Vitorias do jogador contra a CPU (o 'recorde' do Pong)."""
+    try:
+        with open(RECORDE_FILE, "r", encoding="utf-8") as arquivo:
+            return max(0, int(json.load(arquivo).get("recorde", 0)))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return 0
+
+
+def salvar_vitorias(valor):
+    try:
+        with open(RECORDE_FILE, "w", encoding="utf-8") as arquivo:
+            json.dump({"recorde": int(valor)}, arquivo)
+    except OSError:
+        pass
 
 
 class Game:
@@ -38,6 +61,7 @@ class Game:
         self.left_score = 0
         self.right_score = 0
         self.winner = ''
+        self.vitorias = carregar_vitorias()
 
     def handle_event(self, event):
         if event.type != pygame.KEYDOWN:
@@ -123,6 +147,9 @@ class Game:
         if self.left_score >= WINNING_SCORE:
             self.winner = 'Jogador 1 venceu!'
             self.state = self.GAME_OVER
+            if self.mode == 'cpu':
+                self.vitorias += 1
+                salvar_vitorias(self.vitorias)
         elif self.right_score >= WINNING_SCORE:
             self.winner = 'CPU venceu!' if self.mode == 'cpu' else 'Jogador 2 venceu!'
             self.state = self.GAME_OVER
@@ -168,7 +195,7 @@ class Game:
     def _draw_score(self):
         draw_text(self.screen, str(self.left_score), 64, ACCENT_COLOR, (SCREEN_WIDTH // 2 - 90, 65), True)
         draw_text(self.screen, str(self.right_score), 64, SECONDARY_COLOR, (SCREEN_WIDTH // 2 + 90, 65), True)
-        mode_text = 'VS CPU' if self.mode == 'cpu' else '2 JOGADORES'
+        mode_text = f'VS CPU  -  VITORIAS: {self.vitorias}' if self.mode == 'cpu' else '2 JOGADORES'
         draw_text(self.screen, mode_text, 17, MUTED_COLOR, (SCREEN_WIDTH // 2, 115), True)
 
     def _draw_overlay(self, title, subtitle):

@@ -1,7 +1,7 @@
 import json
 import os
 
-ARQUIVO_SCORE = "data/hihgscore.json"
+ARQUIVO_SCORE = "data/highscore.json"
 
 def carregar_pontuacoes():
     if not os.path.exists(ARQUIVO_SCORE):

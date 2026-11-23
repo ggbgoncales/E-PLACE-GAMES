@@ -1,0 +1,257 @@
+.hero {
+  position: relative;
+  overflow: hidden;
+  padding: 44px 42px;
+  border: 1px solid #263969;
+  border-radius: 22px;
+  background:
+    radial-gradient(ellipse at 85% 15%, #25205b 0, transparent 40%),
+    linear-gradient(135deg, #11152f, #0b0d20 72%);
+  box-shadow: 0 0 22px #15dfff22, 0 0 34px #ff45e622;
+}
+
+.hero:after {
+  content: '✦  ·  ✧  ·  ✦';
+  position: absolute;
+  right: 30px;
+  top: 30px;
+  color: #ff45e6;
+  font-size: 23px;
+  letter-spacing: 12px;
+  text-shadow: 0 0 15px #ff45e6;
+  opacity: 0.8;
+}
+
+.eyebrow {
+  color: #18e7ff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+
+.title {
+  font-size: clamp(44px, 7.4vw, 84px);
+  line-height: 1.02;
+  letter-spacing: -2px;
+  margin: 15px 0 18px;
+  max-width: 100%;
+  color: #f3f5ff;
+}
+
+.hero .title {
+  font-size: clamp(40px, 5.2vw, 60px);
+  line-height: 1.04;
+  letter-spacing: -2px;
+  margin: 15px 0 18px;
+  width: auto;
+}
+
+.gradient {
+  background: linear-gradient(90deg, #18e7ff, #7b9bff 48%, #ff45e6);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.lead {
+  color: #c3c9e7;
+  max-width: 650px;
+  font-size: 16px;
+  margin: 0;
+}
+
+.buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 27px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 16px;
+  border-radius: 10px;
+  font-weight: 750;
+  font-size: 13px;
+  border: 1px solid #18e7ff;
+  background: #18e7ff;
+  color: #06101c;
+  text-decoration: none;
+  transition: 0.2s;
+}
+
+.btn:hover {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+  color: #06101c;
+  text-decoration: none;
+}
+
+.secondary {
+  background: transparent;
+  color: #f3f5ff;
+  border-color: #49517f;
+}
+
+.secondary:hover {
+  color: #f3f5ff;
+}
+
+.sectionHead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 42px 0 18px;
+}
+
+.sectionHead h2 {
+  font-size: 24px;
+  margin: 0;
+  letter-spacing: -0.5px;
+  border: none;
+  padding: 0;
+}
+
+.sectionHead p {
+  color: #a7b0d6;
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+
+.tag {
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #ff45e6;
+  border: 1px solid #713a83;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 15px;
+}
+
+.card {
+  border: 1px solid #303864;
+  border-radius: 15px;
+  background: linear-gradient(145deg, #121630, #0d1024);
+  padding: 20px;
+  transition: 0.2s;
+  min-width: 0;
+}
+
+.card:hover {
+  border-color: #18e7ff;
+  transform: translateY(-3px);
+  box-shadow: 0 0 22px #15dfff22, 0 0 34px #ff45e622;
+}
+
+.cardTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.icon {
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  font-size: 25px;
+  border-radius: 12px;
+  background: #131c3c;
+  border: 1px solid #30416f;
+}
+
+.num {
+  font-size: 10px;
+  color: #7986b8;
+  letter-spacing: 2px;
+}
+
+.card h3 {
+  font-size: 18px;
+  margin: 0 0 7px;
+  color: #f3f5ff;
+}
+
+.card p {
+  font-size: 13px;
+  color: #a7b0d6;
+  margin: 0 0 15px;
+}
+
+.textLink {
+  font-size: 12px;
+  font-weight: 800;
+  color: #18e7ff;
+}
+
+.textLink:hover {
+  color: #fff;
+  text-decoration: none;
+}
+
+.features {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.feature {
+  padding: 15px;
+  border: 1px solid #29335d;
+  background: #0d1024;
+  border-radius: 12px;
+}
+
+.feature b {
+  display: block;
+  font-size: 13px;
+  margin: 5px 0;
+  color: #f3f5ff;
+}
+
+.feature span {
+  font-size: 12px;
+  color: #a7b0d6;
+}
+
+@media (max-width: 900px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .hero {
+    padding: 32px 25px;
+  }
+  .features {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 650px) {
+  .hero {
+    padding: 28px 20px;
+  }
+  .hero:after {
+    display: none;
+  }
+  .hero .title {
+    font-size: 42px;
+  }
+  .grid {
+    grid-template-columns: 1fr;
+  }
+  .sectionHead {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
