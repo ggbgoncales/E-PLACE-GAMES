@@ -25,6 +25,7 @@ Eplace Games/
 ├── data/
 │   └── highscore.json    # Pontuações globais
 ├── tests/                # Testes automáticos (unittest)
+├── eplace-docs/          # Este site (Docusaurus)
 └── src/
     ├── jogador.py        # GestorJogador
     ├── utils/

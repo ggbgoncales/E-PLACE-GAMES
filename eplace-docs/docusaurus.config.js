@@ -11,9 +11,12 @@ const config = {
     v4: true,
   },
 
-  // Troque pela URL final do site ao publicar.
-  url: 'https://eplace.example.com',
-  baseUrl: '/',
+  // Publicação no GitHub Pages: https://ggbgoncales.github.io/E-PLACE-GAMES/
+  url: 'https://ggbgoncales.github.io',
+  baseUrl: '/E-PLACE-GAMES/',
+  organizationName: 'ggbgoncales',
+  projectName: 'E-PLACE-GAMES',
+  trailingSlash: false,
 
   onBrokenLinks: 'throw',
 
