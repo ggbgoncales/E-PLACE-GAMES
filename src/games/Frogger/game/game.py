@@ -5,6 +5,7 @@ import json
 import math
 import random
 import pygame
+from gamepad import XboxController, draw_controller_text, draw_controls_table
 
 RECORDE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "recorde.json")
 
@@ -99,7 +100,17 @@ def fonte_retro(tamanho, titulo):
 class Game:
     def __init__(self):
         pygame.init()
-        self.window = pygame.display.set_mode(pygame.display.get_desktop_sizes()[0], pygame.NOFRAME)
+        self.controle = XboxController()
+        # Alguns drivers/versoes do Windows podem retornar lista vazia no get_desktop_sizes.
+        try:
+            tamanhos = pygame.display.get_desktop_sizes()
+            tamanho_tela = tamanhos[0] if tamanhos else (pygame.display.Info().current_w, pygame.display.Info().current_h)
+            if not tamanho_tela[0] or not tamanho_tela[1]:
+                raise RuntimeError("resolucao indisponivel")
+        except Exception:
+            info = pygame.display.Info()
+            tamanho_tela = (info.current_w or 1280, info.current_h or 720)
+        self.window = pygame.display.set_mode(tamanho_tela, pygame.NOFRAME)
         ww, wh = self.window.get_size()
         self.scale = min(ww / VW, wh / VH)
         self.out_w, self.out_h = int(VW * self.scale), int(VH * self.scale)
@@ -124,6 +135,8 @@ class Game:
         self.ultimo_bonus = 0
         self.novo_jogo()
         self.state = "title"
+        self.show_controls = False
+        self.title_menu_idx = 0
 
     # ------------------------------------------------------------------
     # FASES
@@ -382,12 +395,40 @@ class Game:
     # LOOP
     # ------------------------------------------------------------------
     def teclas(self, event):
+        if event.type != pygame.KEYDOWN:
+            return
+        if self.show_controls:
+            if event.key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_SPACE, pygame.K_F1, pygame.K_F2, pygame.K_TAB, pygame.K_y):
+                self.show_controls = False
+            return
+
+        # Atalho universal: Y (Xbox), triangulo (PlayStation), X (Switch).
+        if self.state == "title" and event.key in (pygame.K_y, pygame.K_F1, pygame.K_F2, pygame.K_TAB):
+            self.show_controls = True
+            return
+
+        if self.state == "title":
+            if event.key in (pygame.K_UP, pygame.K_w):
+                self.title_menu_idx = (self.title_menu_idx - 1) % 3
+            elif event.key in (pygame.K_DOWN, pygame.K_s):
+                self.title_menu_idx = (self.title_menu_idx + 1) % 3
+            elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                if self.title_menu_idx == 0:
+                    self.novo_jogo()
+                elif self.title_menu_idx == 1:
+                    self.show_controls = True
+                else:
+                    pygame.quit()
+                    sys.exit()
+            elif event.key == pygame.K_ESCAPE:
+                pygame.quit()
+                sys.exit()
+            return
+
         if event.key == pygame.K_ESCAPE:
             pygame.quit()
             sys.exit()
-        if self.state == "title" and event.key in (pygame.K_RETURN, pygame.K_SPACE):
-            self.novo_jogo()
-        elif self.state == "gameover" and event.key in (pygame.K_r, pygame.K_RETURN):
+        if self.state == "gameover" and event.key in (pygame.K_r, pygame.K_RETURN):
             self.novo_jogo()
         elif self.state == "intro" and event.key in (pygame.K_RETURN, pygame.K_SPACE):
             self.intro_timer = 0
@@ -496,16 +537,61 @@ class Game:
 
         cy = VH // 2
         if self.state == "title":
-            self.draw_overlay((6, 20, 24, 200))
-            hero = pygame.transform.scale(self.frog.build_sprite(), (104, 92))
-            self.canvas.blit(hero, (VW // 2 - 52, 58))
-            self.text_center("SAPO AVENTUREIRO", self.BIG, 162, FROG_BELLY)
-            self.text_center("TRAVESSIA PIXEL - FASES INFINITAS", self.FONT, 192, FROG_LIGHT)
-            self.text_center("Troncos e tartarugas sao seguros. Jacares, cobras e agua nao.", self.SMALL, 214, WHITE)
-            self.text_center("Chegue numa vitoria-regia no topo para passar de fase. Mosca vale +200.", self.SMALL, 228, WHITE)
-            self.text_center(f"RECORDE: {self.recorde}", self.FONT, 250, GOLD)
-            self.text_center("[ ENTER ] JOGAR", self.FONT + 2, 276, GOLD)
-            self.text_center("WASD / SETAS  -  P PAUSA  -  ESC SAIR", self.SMALL, 304, WHITE)
+            self.draw_overlay((6, 20, 24, 205))
+
+            # Menu ampliado, seguindo a hierarquia visual do Space Invaders:
+            # mascote e titulo em destaque, opcoes maiores com selecao evidente
+            # e rodape reservado para navegacao/atalhos, sem cobrir os botoes.
+            hero = pygame.transform.scale(self.frog.build_sprite(), (84, 74))
+            self.canvas.blit(hero, (VW // 2 - 42, 14))
+            self.text_center("SAPO AVENTUREIRO", 24, 92, FROG_BELLY)
+            self.text_center("TRAVESSIA PIXEL - FASES INFINITAS", 10, 127, FROG_LIGHT)
+            self.text_center("Troncos e tartarugas sao seguros. Jacares, cobras e agua nao.", 8.5, 151, WHITE)
+            self.text_center("Chegue na vitoria-regia no topo para passar de fase. Mosca vale +200.", 8.0, 165, WHITE)
+            self.text_center(f"RECORDE: {self.recorde}", 11, 190, GOLD)
+
+            menu_items = ("JOGAR", "CONTROLES", "SAIR")
+            menu_x = VW // 2 - 132
+            menu_w = 264
+            menu_start_y = 218
+            menu_spacing = 27
+            for i, item in enumerate(menu_items):
+                item_y = menu_start_y + i * menu_spacing
+                selected = i == self.title_menu_idx
+                if selected:
+                    pygame.draw.rect(
+                        self.canvas, (15, 80, 125),
+                        (menu_x, item_y - 11, menu_w, 23), border_radius=4
+                    )
+                    pygame.draw.rect(
+                        self.canvas, CYAN,
+                        (menu_x, item_y - 11, 3, 23), border_radius=2
+                    )
+                color = FROG_BELLY if selected else FROG_LIGHT
+                prefix = "> " if selected else "  "
+                self.texto(prefix + item, 13, menu_x + 16, item_y, color, "midleft")
+
+            # Rodape com comandos em alto contraste. Os icones ficam pequenos
+            # e alinhados com o texto para nao dominarem a legenda.
+            footer_rect = pygame.Rect(18, 311, VW - 36, 45)
+            pygame.draw.rect(self.canvas, (3, 12, 25), footer_rect, border_radius=6)
+            pygame.draw.rect(self.canvas, (26, 105, 132), footer_rect, 1, border_radius=6)
+            hint_font = fonte_retro(13, False)
+            navigation_hint = "NAVEGAR: SETAS / D-PAD / ANALOGICO"
+            draw_controller_text(
+                self.canvas, hint_font, navigation_hint, WHITE,
+                (VW // 2, 322), self.controle, "center", icon_size=13
+            )
+            action_font = fonte_retro(11, False)
+            actions_hint = (
+                f"CONFIRMAR: {self.controle.button_icon(0)} / ENTER   "
+                f"VOLTAR: {self.controle.button_icon(1)} / ESC   "
+                f"CONTROLES: {self.controle.button_icon(3)}"
+            )
+            draw_controller_text(
+                self.canvas, action_font, actions_hint, CYAN,
+                (VW // 2, 342), self.controle, "center", icon_size=13
+            )
         elif self.state == "intro":
             self.caixa(cy - 46, 92)
             self.text_center(f"FASE {self.frog.level}", self.FONT + 2, cy - 38, GOLD)
@@ -530,6 +616,23 @@ class Game:
                 self.text_center(f"RECORDE: {self.recorde}", self.FONT, cy + 6, GOLD)
             self.text_center("R / ENTER PARA RECOMECAR  -  ESC PARA SAIR", self.SMALL, cy + 40, WHITE)
 
+        if self.show_controls:
+            # A tela do Frogger usa textos desenhados em uma segunda etapa
+            # (desenhar_textos). Limpe a fila e o canvas antes da tabela para
+            # impedir que o titulo, o HUD e as opcoes do menu aparecam por cima.
+            self.textos.clear()
+            self.canvas.fill(INK)
+            draw_controls_table(
+                self.canvas,
+                [
+                    ('MOVER', 'D-PAD / ANALOGICO', 'D-PAD / ANALOG', 'D-PAD / ANALOG'),
+                    ('PULAR / CONFIRMAR', 'X', 'A', 'A'),
+                    ('VOLTAR / SAIR', 'O', 'B', 'B'),
+                    ('PAUSAR', 'OPTIONS', 'MENU', '+'),
+                ],
+                title="FROGGER - CONTROLES",
+                footer="ESC / ENTER: VOLTAR AO MENU",
+            )
         scaled = pygame.transform.scale(self.canvas, (self.out_w, self.out_h))
         dx = dy = 0
         if self.shake > 0:
@@ -542,7 +645,7 @@ class Game:
     def run(self):
         while True:
             dt = min(self.clock.tick(FPS) / 1000.0, 0.033)
-            for event in pygame.event.get():
+            for event in pygame.event.get() + self.controle.poll_keys():
                 if event.type == pygame.QUIT:
                     pygame.quit()
                     sys.exit()

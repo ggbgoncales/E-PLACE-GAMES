@@ -6,9 +6,11 @@ import math
 import random
 from pathlib import Path
 import pygame
+from gamepad import XboxController, draw_controller_text, draw_controls_table
 from settings import WIDTH, HEIGHT, FPS, TITLE, GRAVITY, FLAP_FORCE, PIPE_SPEED, PIPE_GAP, SAVE_FILE
 pygame.mixer.pre_init(44100, -16, 2, 512)
 pygame.init()
+controller = XboxController()
 Vec=pygame.Vector2
 WHITE=(250,252,255); INK=(20,36,58); SKY=(69,190,242); BLUE=(35,126,222)
 CYAN=(55,236,239); YELLOW=(255,213,55); ORANGE=(255,130,45); GREEN=(53,196,104)
@@ -171,7 +173,7 @@ class Game:
     EFFECTS=[("classic","Clássico",0),("spark","Faíscas",50),("rainbow","Arco-íris",100),("stars","Estrelas",160),("fire","Fogo",220),("ice","Gelo",260)]
     SKINS=[("gold","Dourado",0),("blue","Azul celeste",80),("rose","Rosa",100),("mint","Menta",130),("night","Noturno",200)]
     def __init__(self):
-        self.save=SaveData(); self.state="menu"; self.menu_idx=0; self.shop_tab=0; self.shop_idx=0; self.streak=0
+        self.save=SaveData(); self.state="menu"; self.menu_idx=0; self.shop_tab=0; self.shop_idx=0; self.streak=0; self.show_controls=False
         self.clouds=[Cloud() for _ in range(max(7,WIDTH//90))]; self.particles=[]; self.reset()
     def reset(self):
         self.bird=Bird(self.save.data["hat"],self.save.data["effect"],self.save.data.get("skin","gold")); self.pipes=[]; self.score=0; self.started=False; self.spawn=0; self.speed=PIPE_SPEED; self.gap=PIPE_GAP; self.flash=0
@@ -271,14 +273,15 @@ class Game:
         text(screen,"BIRD",FONT_BIG,YELLOW,(WIDTH//2,137),"center")
         text(screen,"SKYWARD EDITION",SMALL,WHITE,(WIDTH//2,181),"center")
         panel(screen,pygame.Rect(OX+75,365,330,190),(10,35,58,205),(255,255,255,90))
-        items=("JOGAR","CUSTOMIZAR","SAIR")
+        items=("JOGAR","CUSTOMIZAR","CONTROLES","SAIR")
         for i,item in enumerate(items):
-            r=pygame.Rect(OX+104,389+i*51,272,40)
+            r=pygame.Rect(OX+104,378+i*43,272,36)
             if i==self.menu_idx: pygame.draw.rect(screen,(255,198,45),r,border_radius=12); pygame.draw.rect(screen,WHITE,r,2,border_radius=12)
             text(screen,item,FONT,INK if i==self.menu_idx else WHITE,r.center,"center")
         pygame.draw.circle(screen,YELLOW,(34,34),16); text(screen,self.save.data["coins"],SMALL,WHITE,(58,34),"midleft")
         text(screen,f"RECORDE {self.save.data['best']}",SMALL,WHITE,(WIDTH-18,27),"topright")
-        text(screen,"ESPAÇO / ENTER",TINY,WHITE,(WIDTH//2,606),"center")
+        text(screen,"SETAS / D-PAD: NAVEGAR  |  X / A: CONFIRMAR  |  O / B: VOLTAR",TINY,WHITE,(WIDTH//2,620),"center")
+        draw_controller_text(screen,TINY,f"ATALHO CONTROLES: {controller.button_icon(3)}",CYAN,(WIDTH//2,646),controller,"center")
     def draw_play(self):
         self.background()
         for p in self.pipes: p.draw(screen,self.gap)
@@ -289,7 +292,9 @@ class Game:
         if self.score>=6: text(screen,"CANOS MÓVEIS",TINY,YELLOW,(WIDTH-18,24),"topright")
         if not self.started:
             panel(screen,pygame.Rect(OX+80,395,320,86),(7,34,55,185),(255,255,255,80))
-            text(screen,"ESPAÇO PARA VOAR",FONT,WHITE,(WIDTH//2,423),"center"); text(screen,"Passe pelos canos e ganhe moedas",TINY,WHITE,(WIDTH//2,458),"center")
+            jump = controller.button_icon(1) if controller.layout == "nintendo" else controller.button_icon(0)
+            draw_controller_text(screen,FONT,f"ESPAÇO / {jump} PARA VOAR",WHITE,(WIDTH//2,423),controller,"center")
+            text(screen,"Passe pelos canos e ganhe moedas",TINY,WHITE,(WIDTH//2,458),"center")
     def draw_over(self):
         self.draw_play(); shade=pygame.Surface((WIDTH,HEIGHT),pygame.SRCALPHA); shade.fill((4,18,35,135)); screen.blit(shade,(0,0))
         panel(screen,pygame.Rect(OX+62,185,356,300),(248,252,255,240),(255,255,255,255))
@@ -333,16 +338,27 @@ class Game:
         self.save.save()
     def event(self,e):
         if e.type!=pygame.KEYDOWN: return
+        if self.show_controls:
+            if e.key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_SPACE, pygame.K_F1, pygame.K_F2, pygame.K_TAB, pygame.K_y):
+                self.show_controls=False
+            return
+        if self.state=="menu" and e.key in (pygame.K_y, pygame.K_F1, pygame.K_F2, pygame.K_TAB):
+            self.show_controls=True; return
+        if self.state == "paused":
+            if e.key in (pygame.K_RETURN, pygame.K_p, pygame.K_ESCAPE): self.state = "play"
+            return
         if self.state=="menu":
-            if e.key in (pygame.K_UP,pygame.K_w): self.menu_idx=(self.menu_idx-1)%3
-            elif e.key in (pygame.K_DOWN,pygame.K_s): self.menu_idx=(self.menu_idx+1)%3
+            if e.key in (pygame.K_UP,pygame.K_w): self.menu_idx=(self.menu_idx-1)%4
+            elif e.key in (pygame.K_DOWN,pygame.K_s): self.menu_idx=(self.menu_idx+1)%4
             elif e.key in (pygame.K_RETURN,pygame.K_SPACE):
                 if self.menu_idx==0: self.reset(); self.state="play"
                 elif self.menu_idx==1: self.state="shop"
+                elif self.menu_idx==2: self.show_controls=True
                 else: pygame.quit(); raise SystemExit
             elif e.key==pygame.K_ESCAPE: pygame.quit(); raise SystemExit
         elif self.state=="play":
             if e.key in (pygame.K_SPACE,pygame.K_UP,pygame.K_w): self.flap()
+            elif e.key==pygame.K_RETURN: self.state="paused"
             elif e.key==pygame.K_ESCAPE: self.state="menu"
         elif self.state=="over":
             if e.key in (pygame.K_SPACE,pygame.K_RETURN): self.reset(); self.state="play"
@@ -357,13 +373,25 @@ class Game:
     def run(self):
         while True:
             dt=min(clock.tick(FPS)/1000,.033)
-            for e in pygame.event.get():
+            physical_events = pygame.event.get()
+            pad_events = controller.poll_keys()
+            if controller.layout == "nintendo":
+                for pe in pad_events:
+                    if pe.type == pygame.KEYDOWN and pe.key in (pygame.K_SPACE, pygame.K_ESCAPE):
+                        pe.key = pygame.K_ESCAPE if pe.key == pygame.K_SPACE else pygame.K_SPACE
+            for e in physical_events + pad_events:
                 if e.type==pygame.QUIT: pygame.quit(); return
                 self.event(e)
             if self.state=="play": self.update_play(dt); self.draw_play()
+            elif self.state=="paused":
+                self.draw_play(); shade=pygame.Surface((WIDTH,HEIGHT),pygame.SRCALPHA); shade.fill((5,15,30,165)); screen.blit(shade,(0,0))
+                text(screen,"PAUSADO",FONT_TITLE,WHITE,(WIDTH//2,HEIGHT//2-20),"center")
+                draw_controller_text(screen,TINY,f"{controller.button_icon(7)} / ENTER PARA CONTINUAR",CYAN,(WIDTH//2,HEIGHT//2+28),controller,"center")
             else:
                 self.update_common(dt)
-                if self.state=="menu": self.draw_menu()
+                if self.state=="menu":
+                    self.draw_menu()
+                    if self.show_controls: draw_controls_table(screen, [('VOAR / JOGAR', 'X', 'A', 'A'), ('VOLTAR / SAIR', 'O', 'B', 'B'), ('PAUSAR', 'OPTIONS', 'MENU', '+')], title="FLAPPY BIRD - CONTROLES")
                 elif self.state=="shop": self.draw_shop()
                 else: self.draw_over()
             present()

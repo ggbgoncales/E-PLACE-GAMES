@@ -10,7 +10,8 @@ os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-JOGOS = os.path.join(RAIZ, "src", "games")
+SRC = os.path.join(RAIZ, "src")
+JOGOS = os.path.join(SRC, "games")
 
 
 def entrar_no_jogo(nome_pasta):
@@ -21,6 +22,9 @@ def entrar_no_jogo(nome_pasta):
             del sys.modules[nome]
     sys.path[:] = [p for p in sys.path if not p.startswith(JOGOS)]
     sys.path.insert(0, pasta)
+    # Como nos main.py dos jogos: a pasta src fica no caminho para achar o modulo "gamepad".
+    if SRC not in sys.path:
+        sys.path.append(SRC)
     return pasta
 
 

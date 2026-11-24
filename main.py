@@ -18,6 +18,7 @@ import sys
 import json
 import math
 import subprocess
+from src.gamepad import XboxController
 
 # Janela sem borda do tamanho do monitor (nao troca a resolucao = nao pisca)
 os.environ.setdefault("SDL_VIDEO_WINDOW_POS", "0,0")
@@ -134,6 +135,7 @@ class Eplace:
         self.jogo_idx = 0
         self.capas_cache = {}  # Adicione esta linha aqui
         pygame.init()
+        self.controle = XboxController()
         pygame.display.set_caption("Eplace - Launcher")
         self.cfg = carregar_config()
         self.som_botao = None
@@ -336,7 +338,9 @@ class Eplace:
 
     # -------------------------------------------------------------- eventos
     def eventos(self):
-        for e in pygame.event.get():
+        eventos = pygame.event.get()
+        eventos.extend(self.controle.poll_keys())
+        for e in eventos:
             if e.type == pygame.QUIT:
                 self.rodando = False
             elif e.type == pygame.KEYDOWN and not self.trans_tela_ativa:
@@ -512,6 +516,18 @@ class Eplace:
         env = os.environ.copy()
         env["SDL_VIDEO_WINDOW_POS"] = "0,0"
         env["SDL_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR"] = "0"
+        # Permite que os jogos importem o modulo compartilhado de controle.
+        env["PYTHONPATH"] = SRC_DIR + os.pathsep + env.get("PYTHONPATH", "")
+        # O launcher continua aberto em segundo plano, mas a musica do menu
+        # deve ficar pausada enquanto o jogo estiver em primeiro plano.
+        musica_pausada = False
+        try:
+            if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
+                pygame.mixer.music.pause()
+                musica_pausada = True
+        except pygame.error:
+            pass
+
         try:
             proc = subprocess.Popen([sys.executable, jogo["main"]],
                                     cwd=jogo["caminho"], env=env)
@@ -521,6 +537,14 @@ class Eplace:
                 self.clock.tick(15)
         except Exception as ex:
             print("Erro ao iniciar o jogo:", ex)
+        finally:
+            # Retoma a trilha do ponto em que foi pausada ao voltar ao menu.
+            if musica_pausada:
+                try:
+                    if pygame.mixer.get_init():
+                        pygame.mixer.music.unpause()
+                except pygame.error:
+                    pass
 
         # Jogo fechou: volta direto para a tela inicial
         pygame.event.clear()
@@ -622,7 +646,7 @@ class Eplace:
             self.tela.blit(s, (sel.x - k, sel.y - k))
         pygame.draw.rect(self.tela, DESTAQUE, sel, width=4, border_radius=14)
 
-        self._rodape("SETAS mover   |   ENTER selecionar   |   H recordes   |   ESC sair")
+        self._rodape("SETAS / ANALOGICO mover   |   A selecionar   |   B voltar   |   QUADRADO / X / Y recordes")
 
     # ---- TRANSICAO: logo desliza pro canto sup. esquerdo (marca dagua) ----
     def _marca_dagua_alvo(self):
@@ -732,7 +756,7 @@ class Eplace:
                                  border_radius=2)
 
         self._rodape(
-            "SETAS cima/baixo   |   ENTER jogar   |   H recordes   |   BACKSPACE / ESC voltar (animado)")
+            "DIRECIONAL / ANALOGICO mover   |   A jogar   |   B voltar")
 
     def _draw_recordes(self):
         self._fundo(self.bg_jogos)
@@ -778,6 +802,11 @@ class Eplace:
         self._fundo(None)
         titulo = self.f_titulo.render("CONFIGURACOES", True, BRANCO)
         self.tela.blit(titulo, titulo.get_rect(center=(LARGURA // 2, 120)))
+        status_controle = (f"CONTROLE: {self.controle.device_name.upper()} CONECTADO"
+                           if self.controle.connected else "CONTROLE: DESCONECTADO")
+        cor_controle = (70, 230, 160) if self.controle.connected else (150, 150, 150)
+        status_img = self.f_pequena.render(status_controle, True, cor_controle)
+        self.tela.blit(status_img, status_img.get_rect(center=(LARGURA // 2, 185)))
 
         opcoes = [
             ("Tela cheia", "LIGADO" if self.cfg["tela_cheia"] else "DESLIGADO"),

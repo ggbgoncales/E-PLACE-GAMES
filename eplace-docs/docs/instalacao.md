@@ -50,6 +50,16 @@ O launcher abre o menu e inicia cada jogo em um processo próprio.
 | Recordes | `R` atualiza · `ESC` ou `BACKSPACE` volta |
 | Configurações | `←` `→` `↑` `↓` movem e alteram · `ENTER` confirma · `ESC` volta |
 
+## Controle USB e Bluetooth
+
+O launcher e os seis jogos aceitam controles de videogame (Xbox, PlayStation, Nintendo Switch e modelos genéricos), além do teclado. O E-Place usa o mapeamento padrão do SDL e, se o controle não tiver um, aplica um layout genérico.
+
+- Conecte o controle por USB ou emparelhe-o por Bluetooth antes de abrir o jogo. Se conectar depois, o launcher tenta reconhecê-lo sozinho.
+- No launcher: o analógico esquerdo ou o direcional navega, o botão de baixo confirma e o botão da direita volta.
+- Cada jogo tem uma tela de controles, aberta pelo botão de cima do controle ou pela tecla `F1`.
+
+O suporte depende de o sistema operacional reconhecer o dispositivo como controle de jogo. Controles genéricos variam bastante entre fabricantes.
+
 ## Configurações
 
 As opções ficam salvas em `config.json`:

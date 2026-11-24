@@ -12,6 +12,7 @@ FPS = 60
 # Paleta pixel art
 INK = (18, 31, 30)
 WHITE = (248, 248, 224)
+CYAN = (73, 220, 245)  # destaque ciano do menu e da interface de controles
 CREAM = (250, 235, 162)
 GOLD = (255, 211, 63)
 RED = (218, 66, 68)

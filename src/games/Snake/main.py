@@ -1,3 +1,6 @@
+import os as _os, sys as _sys
+_SRC_DIR = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), "..", ".."))
+if _SRC_DIR not in _sys.path: _sys.path.insert(0, _SRC_DIR)
 import os
 os.environ["SDL_VIDEO_WINDOW_POS"] = "0,0"
 os.environ["SDL_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR"] = "0"
@@ -8,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pygame
+from gamepad import XboxController, draw_controller_text, draw_controls_table
 
 # ============================================================
 # Cobra Neon - jogo completo em um unico arquivo
@@ -37,6 +41,7 @@ GOLD = (255, 201, 74)
 RED = (255, 77, 91)
 
 pygame.init()
+controller = XboxController()
 pygame.display.set_caption("Cobra Neon")
 
 
@@ -135,8 +140,8 @@ class Button:
         self.accent = accent
         self.hover = 0.0
 
-    def update(self, mouse, dt):
-        target = 1.0 if self.rect.collidepoint(mouse) else 0.0
+    def update(self, mouse, dt, selected=False):
+        target = 1.0 if (selected or self.rect.collidepoint(mouse)) else 0.0
         self.hover += (target - self.hover) * min(1, dt * 12)
 
     def draw(self, surface, font):
@@ -179,6 +184,8 @@ class SnakeGame:
         self.record = load_record()
         self.particles = []
         self.state = "menu"
+        self.show_controls = False
+        self.menu_selection = 0
         self.fullscreen = True
         self.difficulty = 1
         self.difficulties = [
@@ -226,9 +233,10 @@ class SnakeGame:
 
     def make_menu_buttons(self):
         self.buttons = [
-            Button((WIDTH // 2 - 155, 420, 310, 62), "JOGAR", "play", GREEN),
-            Button((WIDTH // 2 - 155, 498, 310, 55), "DIFICULDADE", "difficulty", CYAN),
-            Button((WIDTH // 2 - 155, 569, 310, 55), "SAIR", "quit", PINK),
+            Button((WIDTH // 2 - 155, 390, 310, 52), "JOGAR", "play", GREEN),
+            Button((WIDTH // 2 - 155, 452, 310, 52), "DIFICULDADE", "difficulty", CYAN),
+            Button((WIDTH // 2 - 155, 514, 310, 52), "CONTROLES", "controls", CYAN),
+            Button((WIDTH // 2 - 155, 576, 310, 52), "SAIR", "quit", PINK),
         ]
 
     def set_state(self, action):
@@ -237,6 +245,8 @@ class SnakeGame:
             self.state = "playing"
         elif action == "difficulty":
             self.difficulty = (self.difficulty + 1) % len(self.difficulties)
+        elif action == "controls":
+            self.show_controls = True
         elif action == "quit":
             pygame.quit()
             sys.exit()
@@ -264,10 +274,21 @@ class SnakeGame:
             pygame.quit()
             sys.exit()
         if event.type == pygame.KEYDOWN:
+            if self.show_controls:
+                if event.key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_SPACE, pygame.K_F1, pygame.K_F2, pygame.K_TAB, pygame.K_y):
+                    self.show_controls = False
+                return
+            if self.state == "menu" and event.key in (pygame.K_y, pygame.K_F1, pygame.K_F2, pygame.K_TAB):
+                self.show_controls = True
+                return
             if event.key == pygame.K_F11:
                 self.toggle_fullscreen()
             elif event.key == pygame.K_m:
                 self.sounds.enabled = not self.sounds.enabled
+            elif self.state == "menu" and event.key in (pygame.K_UP, pygame.K_w):
+                self.menu_selection = (self.menu_selection - 1) % len(self.buttons)
+            elif self.state == "menu" and event.key in (pygame.K_DOWN, pygame.K_s):
+                self.menu_selection = (self.menu_selection + 1) % len(self.buttons)
             elif self.state == "menu" and event.key == pygame.K_ESCAPE:
                 pygame.quit()
                 sys.exit()
@@ -278,8 +299,11 @@ class SnakeGame:
                     self.state = "playing"
                 elif self.state == "gameover":
                     self.state = "menu"
+            elif self.state == "menu" and event.key == pygame.K_x:
+                # Botao oeste: Quadrado (PS), X (Xbox) ou Y (Nintendo) troca a dificuldade.
+                self.set_state("difficulty")
             elif self.state == "menu" and event.key in (pygame.K_RETURN, pygame.K_SPACE):
-                self.set_state("play")
+                self.set_state(self.buttons[self.menu_selection].action)
             elif self.state == "gameover" and event.key in (pygame.K_RETURN, pygame.K_SPACE):
                 self.set_state("play")
             elif self.state == "playing":
@@ -311,8 +335,8 @@ class SnakeGame:
 
     def update(self, dt):
         mouse = self.virtual_mouse(pygame.mouse.get_pos())
-        for button in self.buttons:
-            button.update(mouse, dt)
+        for i, button in enumerate(self.buttons):
+            button.update(mouse, dt, selected=(self.state == "menu" and i == self.menu_selection))
         for p in self.particles:
             p.update(dt)
         self.particles = [p for p in self.particles if p.life > 0]
@@ -502,10 +526,16 @@ class SnakeGame:
             fill.width = int(bar.width * self.combo_timer / 3.0)
             pygame.draw.rect(self.canvas, CYAN, fill, border_radius=4)
 
-        controls = ["WASD / SETAS  Mover", "P / ESC       Pausar", "M             Som", "F11           Tela cheia"]
+        controls = [("WASD / SETAS  MOVER", None), ("D-PAD / ANALOGICO MOVER", None),
+                    (f"{controller.button_icon(0)}  JOGAR / CONFIRMAR", controller),
+                    (f"{controller.button_icon(1)}  VOLTAR / PAUSAR", controller),
+                    (f"{controller.button_icon(2)}  TROCAR DIFICULDADE", controller),
+                    ("P / ESC       PAUSAR", None), ("M             SOM", None), ("F11           TELA CHEIA", None)]
         self.canvas.blit(self.font_sm.render("CONTROLES", True, WHITE), (x, 598))
-        for i, line in enumerate(controls):
-            self.canvas.blit(fonte_retro(18, False).render(line, True, MUTED), (x, 628 + i * 20))
+        small = fonte_retro(16, False)
+        for i, (line, pad) in enumerate(controls):
+            if pad: draw_controller_text(self.canvas, small, line, MUTED, (x, 618 + i * 15), pad)
+            else: self.canvas.blit(small.render(line, True, MUTED), (x, 618 + i * 15))
 
     def stat_card(self, x, y, label, value, color):
         rect = pygame.Rect(x, y, 204, 84)
@@ -540,8 +570,22 @@ class SnakeGame:
         self.buttons[1].text = f"DIFICULDADE: {diff}"
         for button in self.buttons:
             button.draw(self.canvas, self.font_btn)
-        hint = self.font_sm.render("ENTER para jogar  |  M para som  |  F11 tela cheia", True, MUTED)
-        self.canvas.blit(hint, hint.get_rect(center=(WIDTH // 2, 665)))
+        # Rodape de navegacao do menu: controles sempre visiveis junto do atalho.
+        shortcut_font = fonte_retro(15, False)
+        navigation_hint = (
+            f"SETAS / D-PAD / ANALOGICO: NAVEGAR  |  "
+            f"{controller.button_icon(0)} / ENTER: CONFIRMAR  |  "
+            f"{controller.button_icon(1)} / ESC: VOLTAR"
+        )
+        draw_controller_text(
+            self.canvas, shortcut_font, navigation_hint, MUTED,
+            (WIDTH // 2, 660), controller, "center"
+        )
+        draw_controller_text(
+            self.canvas, shortcut_font,
+            f"ATALHO CONTROLES: {controller.button_icon(3)}",
+            MUTED, (WIDTH // 2, 688), controller, "center"
+        )
 
     def draw_overlay(self, game_over=False):
         shade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
@@ -563,6 +607,8 @@ class SnakeGame:
     def draw(self):
         if self.state == "menu":
             self.draw_menu()
+            if self.show_controls:
+                draw_controls_table(self.canvas, [('MOVER', 'D-PAD / ANALOGICO', 'D-PAD / ANALOG', 'D-PAD / ANALOG'), ('JOGAR / CONFIRMAR', 'X', 'A', 'A'), ('TROCAR DIFICULDADE', 'SQUARE', 'X', 'Y'), ('VOLTAR / PAUSAR', 'O', 'B', 'B'), ('PAUSAR PELO TECLADO', 'P / ESC', 'P / ESC', 'P / ESC')], title="SNAKE - CONTROLES")
         else:
             self.draw_background()
             if self.special_food:
@@ -593,7 +639,8 @@ class SnakeGame:
     def run(self):
         while True:
             dt = min(self.clock.tick(FPS) / 1000.0, 0.05)
-            for event in pygame.event.get():
+            eventos = pygame.event.get() + controller.poll_keys()
+            for event in eventos:
                 self.handle_event(event)
             self.update(dt)
             self.draw()

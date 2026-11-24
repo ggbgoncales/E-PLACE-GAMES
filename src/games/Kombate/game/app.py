@@ -10,6 +10,7 @@ os.environ["SDL_VIDEO_WINDOW_POS"] = "0,0"
 os.environ["SDL_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR"] = "0"
 
 import pygame
+from gamepad import XboxController, draw_controller_text, draw_controls_table
 
 from settings import LARGURA, ALTURA, FPS, TITULO, CONTROLES, NIVEL_CPU, CHAO_Y
 from game.characters import PERSONAGENS
@@ -55,6 +56,7 @@ class App:
     def __init__(self):
         pygame.mixer.pre_init(22050, -16, 1, 512)
         pygame.init()
+        self.controle = XboxController()
         pygame.display.set_caption(TITULO)
         self.gpu = self._abrir_tela()
         pygame.mouse.set_visible(False)
@@ -78,7 +80,7 @@ class App:
         self.particulas = Particulas()
         self.tremor = Tremor()
         self.sons = Sons()
-        self.teclado = {1: Teclado(1), 2: Teclado(2)}
+        self.teclado = {1: Teclado(1, self.controle), 2: Teclado(2)}
         self.t = 0
         self.debug = False
         self.nivel = nivel_valido(NIVEL_CPU)
@@ -101,7 +103,7 @@ class App:
     def run(self):
         while True:
             self.t += 1
-            eventos = pygame.event.get()
+            eventos = pygame.event.get() + self.controle.poll_keys()
             for e in eventos:
                 if e.type == pygame.QUIT:
                     self.sair()
@@ -201,6 +203,10 @@ class App:
     def cena_menu(self, eventos):
         itens = self._itens_menu()
         for k in self._teclas(eventos):
+            if k in (pygame.K_F1, pygame.K_TAB):
+                self.sons.tocar("ok")
+                self.cena = "controles"
+                break
             if k in (pygame.K_UP, pygame.K_w):
                 self.menu_idx = (self.menu_idx - 1) % len(itens)
                 self.sons.tocar("menu")
@@ -250,41 +256,19 @@ class App:
                     texto(self.tela, ">", self.fontes["media"], (255, 255, 255), (LARGURA // 2 + 72, y))
             else:
                 self._botao(item, (LARGURA // 2, y), i == self.menu_idx)
-        texto(self.tela, "Setas / W S escolhem   -   ENTER confirma   -   ESC volta ao launcher",
-              self.fontes["pequena"], (200, 185, 190), (LARGURA // 2, ALTURA - 34), contorno=1)
+        texto(self.tela, "SELECIONE CONTROLES NO MENU  |  F1: ATALHO PELO TECLADO",
+              self.fontes["mini"], (200, 185, 190), (LARGURA // 2, ALTURA - 34))
 
     # ================================================================ controles
     def cena_controles(self, eventos):
         if any(k in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_SPACE) for k in self._teclas(eventos)):
             self.sons.tocar("menu")
             self.cena = "menu"
+            return
         self._cenario()
         self._veu(205)
-        texto(self.tela, "CONTROLES", self.fontes["grande"], (240, 60, 45), (LARGURA // 2, 62))
-        linhas = [("Andar", "esquerda", "direita"), ("Pular", "cima", None), ("Agachar", "baixo", None),
-                  ("Soco", "soco", None), ("Chute", "chute", None), ("Especial 1", "especial1", None),
-                  ("Especial 2", "especial2", None), ("Dash (ou toque duplo)", "dash", None)]
-        texto(self.tela, "JOGADOR 1", self.fontes["media"], (255, 90, 80), (640, 128))
-        texto(self.tela, "JOGADOR 2", self.fontes["media"], (90, 170, 255), (960, 128))
-        for i, (nome, a, b) in enumerate(linhas):
-            y = 176 + i * 42
-            if i % 2 == 0:
-                faixa = pygame.Surface((860, 40), pygame.SRCALPHA)
-                faixa.fill((255, 255, 255, 14))
-                self.tela.blit(faixa, (210, y - 20))
-            texto(self.tela, nome, self.fontes["media"], (255, 255, 255), (240, y), "midleft")
-            for col, slot in ((640, 1), (960, 2)):
-                k = CONTROLES[slot][a].upper()
-                if b:
-                    k += " / " + CONTROLES[slot][b].upper()
-                texto(self.tela, k, self.fontes["media"], (230, 225, 235), (col, y))
-        dicas = ["DEFENDER: segure para TRAS (agachado + tras defende BAIXO)  -  defender demais QUEBRA a guarda",
-                 "ARREMESSO: SOCO + CHUTE juntos, colado no oponente (nao da para defender)",
-                 "COMBO: acerte soco/chute e aperte um ESPECIAL logo depois  -  especiais tem RECARGA (icones no HUD)",
-                 "ESC na luta = pausa   |   F1 = mostrar hitboxes"]
-        for i, d in enumerate(dicas):
-            texto(self.tela, d, self.fontes["pequena"], (255, 215, 150) if i < 3 else (200, 190, 200),
-                  (LARGURA // 2, 540 + i * 34), contorno=1)
+        linhas = [('MOVER', 'D-PAD / ANALOGICO', 'D-PAD / ANALOG', 'D-PAD / ANALOG'), ('PULAR', 'D-PAD CIMA', 'D-PAD CIMA', 'D-PAD CIMA'), ('AGACHAR', 'D-PAD BAIXO', 'D-PAD BAIXO', 'D-PAD BAIXO'), ('SOCO', 'X', 'A', 'B'), ('CHUTE', 'SQUARE', 'X', 'Y'), ('ESPECIAL ESQUERDO', 'L1', 'LB', 'L'), ('ESPECIAL DIREITO', 'R1', 'RB', 'R'), ('DASH', 'TRIANGLE / TOQUE DUPLO', 'Y / TOQUE DUPLO', 'X / TOQUE DUPLO'), ('PAUSAR / VOLTAR', 'OPTIONS', 'MENU', '+')]
+        draw_controls_table(self.tela, linhas, title="KOMBATE - CONTROLES", footer="ESC / CONFIRMAR: VOLTAR AO MENU")
 
     # ================================================================ selecao
     def abrir_selecao(self):

@@ -47,6 +47,41 @@ python main.py
 
 As opções (tela cheia, volume e som do menu) ficam em `config.json`, que o launcher cria quando você altera algo. Os controles de cada jogo estão na [documentação](#documentação).
 
+## Controles USB e Bluetooth (gamepad)
+
+O E-PLACE usa o mapeamento universal SDL/Pygame quando disponivel e possui
+fallback para controles sem mapeamento. A compatibilidade inclui controles
+Xbox, PlayStation (DualShock/DualSense), Nintendo Switch (Pro Controller e
+controles reconhecidos pelo sistema) e modelos USB/Bluetooth genericos.
+O teclado continua funcionando normalmente.
+
+Antes de abrir o E-PLACE, conecte o controle por USB ou emparelhe-o nas
+configuracoes Bluetooth do Windows. Se o controle for conectado depois, o
+launcher tenta reconhece-lo automaticamente. O suporte depende de o Windows
+reconhecer o dispositivo como controle de jogo e de o driver disponibilizar
+seus botoes/eixos ao Pygame.
+
+### Launcher
+- Analógico esquerdo ou direcional: navegar
+- Botao inferior (A / Cross / B, conforme o controle): confirmar
+- Botao direito (B / Circle / A, conforme o controle): voltar
+- Start / Options / Plus: confirmar
+
+### Jogos
+- Snake: direcional/analógico para virar; botao inferior para iniciar; botao direito para pausar/voltar
+- Flappy Bird: botao inferior para voar; direcional para navegar nos menus
+- Frogger: direcional/analógico para mover; botao inferior para iniciar; botao direito para sair
+- Space Invaders: analógico para mover; botao inferior para disparar; RB/R1 para impulso
+- Ping Pong: analógico vertical para mover a raquete; botao inferior inicia contra CPU;
+  botao oeste inicia versus local; botao direito volta
+- Kombate: analógico para mover; botao inferior soco; botao oeste chute;
+  L1/LB e R1/RB especiais; botao norte dash; botao direito pausa/volta.
+  O teclado do segundo jogador continua disponivel.
+
+Observacao: controles genericos variam bastante entre fabricantes. O E-PLACE
+usa o padrao SDL sempre que o dispositivo fornece um mapeamento conhecido;
+caso contrario, aplica um layout generico que pode variar conforme o driver.
+
 ## Recordes
 
 A tela de Recordes do launcher (tecla `H`) lista a melhor marca de cada jogo.
