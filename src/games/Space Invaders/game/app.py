@@ -2,7 +2,7 @@ import os
 os.environ["SDL_VIDEO_WINDOW_POS"] = "0,0"
 os.environ["SDL_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR"] = "0"
 """
-NEON VOID - arcade espacial em um unico arquivo.
+SPACE INVADERS - arcade espacial em um unico arquivo.
 Requisito: pip install pygame
 Execucao: python main.py
 
@@ -18,18 +18,38 @@ Controles:
 import math
 import random
 import sys
+import json
 from array import array
 
 try:
     import pygame
+    from gamepad import XboxController, draw_controller_text, draw_controls_table
 except ImportError:
     print("Pygame nao encontrado. Instale com: pip install pygame")
     raise
 
+# Recorde persistente compartilhado com o launcher E-PLACE.
+BASE_GAME_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+HIGHSCORE_FILE = os.path.join(BASE_GAME_DIR, "highscore.json")
+
+def carregar_recorde():
+    try:
+        with open(HIGHSCORE_FILE, "r", encoding="utf-8") as arquivo:
+            return max(0, int(json.load(arquivo).get("recorde", 0)))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return 0
+
+def salvar_recorde(valor):
+    try:
+        with open(HIGHSCORE_FILE, "w", encoding="utf-8") as arquivo:
+            json.dump({"recorde": int(valor)}, arquivo, indent=2)
+    except OSError as erro:
+        print("Nao foi possivel salvar o recorde:", erro)
+
 # ----------------------------- CONFIGURACAO -----------------------------
 WIDTH, HEIGHT = 960, 540
 FPS = 60
-TITLE = "NEON VOID"
+TITLE = "SPACE INVADERS"
 Vec = pygame.Vector2
 
 BLACK = (2, 5, 15)
@@ -45,6 +65,7 @@ GREEN = (80, 255, 160)
 
 pygame.mixer.pre_init(44100, -16, 2, 512)
 pygame.init()
+controller = XboxController()
 pygame.display.set_caption(TITLE)
 # Tela cheia: o jogo desenha em "screen" (960x540) e e ampliado para o monitor
 display = pygame.display.set_mode(pygame.display.get_desktop_sizes()[0], pygame.NOFRAME)
@@ -60,11 +81,24 @@ def present():
     pygame.display.flip()
 clock = pygame.time.Clock()
 
-FONT_BIG = pygame.font.SysFont("arialblack", 68)
-FONT_TITLE = pygame.font.SysFont("arialblack", 38)
-FONT = pygame.font.SysFont("segoeui", 22)
-FONT_SMALL = pygame.font.SysFont("consolas", 16)
-FONT_TINY = pygame.font.SysFont("consolas", 12)
+def fonte_retro(tamanho, titulo):
+    """Titulos em Press Start 2P e textos em VT323 (assets/fonts). Sem os arquivos, usa fonte do sistema."""
+    import os
+    nome = "PressStart2P-Regular.ttf" if titulo else "VT323-Regular.ttf"
+    pasta = os.path.abspath(os.path.dirname(__file__))
+    for _ in range(8):
+        caminho = os.path.join(pasta, "assets", "fonts", nome)
+        if os.path.exists(caminho):
+            return pygame.font.Font(caminho, max(8, int(tamanho)))
+        pasta = os.path.dirname(pasta)
+    return pygame.font.SysFont("arial,helveticaneue,dejavusans", int(tamanho), bold=titulo)
+
+
+FONT_BIG = fonte_retro(40, True)
+FONT_TITLE = fonte_retro(22, True)
+FONT = fonte_retro(28, False)
+FONT_SMALL = fonte_retro(21, False)
+FONT_TINY = fonte_retro(16, False)
 
 
 def clamp(v, lo, hi):
@@ -213,10 +247,10 @@ class Player:
 
     def update(self, dt, particles):
         keys = pygame.key.get_pressed()
-        direction = Vec(keys[pygame.K_d] - keys[pygame.K_a] + keys[pygame.K_RIGHT] - keys[pygame.K_LEFT],
-                        keys[pygame.K_s] - keys[pygame.K_w] + keys[pygame.K_DOWN] - keys[pygame.K_UP])
+        direction = Vec(keys[pygame.K_d] - keys[pygame.K_a] + keys[pygame.K_RIGHT] - keys[pygame.K_LEFT] + controller.axis(0),
+                        keys[pygame.K_s] - keys[pygame.K_w] + keys[pygame.K_DOWN] - keys[pygame.K_UP] + controller.axis(1))
         if direction.length_squared(): direction = direction.normalize()
-        boosting = (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]) and self.energy > 2
+        boosting = (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT] or controller.button(5)) and self.energy > 2
         speed = 355 if boosting else 235
         if boosting: self.energy -= 42 * dt
         else: self.energy = min(100, self.energy + 22 * dt)
@@ -262,7 +296,7 @@ class Player:
         if self.invuln > 0 and int(self.invuln*14) % 2: return
         x, y = int(self.pos.x), int(self.pos.y)
         keys = pygame.key.get_pressed()
-        boost = (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]) and self.energy > 2
+        boost = (keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT] or controller.button(5)) and self.energy > 2
         pulse = math.sin(pygame.time.get_ticks() * .02)
 
         # Nave compacta: aproximadamente 38 px de largura por 42 px de altura.
@@ -393,9 +427,10 @@ class Powerup:
 class Game:
     def __init__(self):
         self.stars = Starfield()
-        self.highscore = 0
+        self.highscore = carregar_recorde()
         self.state = "menu"
         self.menu_index = 0
+        self.show_controls = False
         self.reset()
 
     def reset(self):
@@ -431,7 +466,7 @@ class Game:
         self.stars.update(1.0 + self.wave*.03)
         self.player.update(dt,self.particles)
         keys=pygame.key.get_pressed()
-        if keys[pygame.K_SPACE]: self.player.shoot(self.bullets)
+        if keys[pygame.K_SPACE] or controller.button(0): self.player.shoot(self.bullets)
         self.message_time-=dt; self.combo_time-=dt
         if self.combo_time<=0: self.combo=1
         self.wave_timer+=dt
@@ -482,10 +517,14 @@ class Game:
                 self.floaters.append(FloatingText(p.pos,p.kind.upper(),p.COLORS[p.kind]))
                 self.powerups.remove(p)
         if self.player.hp<=0:
-            self.highscore=max(self.highscore,self.score); self.state="gameover"; play(SND_BOOM)
+            if self.score > self.highscore:
+                self.highscore = self.score
+                salvar_recorde(self.highscore)
+            self.state="gameover"; play(SND_BOOM)
 
     def draw_hud(self,surf):
-        panel=pygame.Surface((WIDTH,60),pygame.SRCALPHA); panel.fill((3,8,24,190)); surf.blit(panel,(0,0))
+        # HUD transparente: os indicadores ficam diretamente sobre o cenario,
+        # sem uma faixa opaca que esconda inimigos ou projeteis.
         text(surf,"INTEGRIDADE",FONT_TINY,(150,180,200),(18,10))
         pygame.draw.rect(surf,(30,40,57),(18,28,210,13),border_radius=6)
         hpw=210*max(0,self.player.hp)/100
@@ -494,11 +533,15 @@ class Game:
         text(surf,"ENERGIA",FONT_TINY,(150,180,200),(250,10))
         pygame.draw.rect(surf,(30,40,57),(250,28,130,10),border_radius=5)
         pygame.draw.rect(surf,CYAN,(250,28,130*self.player.energy/100,10),border_radius=5)
-        if self.player.shield>0: text(surf,f"ESCUDO {int(self.player.shield)}",FONT_TINY,CYAN,(400,20))
+        if self.player.shield>0:
+            text(surf,f"ESCUDO {int(self.player.shield)}",FONT_TINY,CYAN,(400,20))
+
+        # Pontuacao no topo direito; os dois indicadores ficam empilhados abaixo.
         text(surf,f"{self.score:08d}",FONT_TITLE,WHITE,(WIDTH-20,6),"topright")
-        text(surf,f"ONDA {self.wave}   x{self.combo}",FONT_SMALL,YELLOW,(WIDTH-20,45),"bottomright")
+        tempo_onda=max(0.0,18.0-self.wave_timer)
+        text(surf,f"ONDA {self.wave}  {tempo_onda:0.1f}s  x{self.combo}",FONT_SMALL,YELLOW,(WIDTH-20,54),"topright")
         if self.player.weapon_timer>0:
-            text(surf,f"ARMA NV.{self.player.weapon}  {self.player.weapon_timer:0.1f}s",FONT_TINY,YELLOW,(WIDTH/2,18),"midtop")
+            text(surf,f"ARMA NV.{self.player.weapon}  {self.player.weapon_timer:0.1f}s",FONT_TINY,CYAN,(WIDTH-20,76),"topright")
 
     def draw_play(self):
         world=pygame.Surface((WIDTH,HEIGHT)); self.stars.draw(world)
@@ -524,28 +567,42 @@ class Game:
         glow_circle(screen,BLUE,(760,155),72,4)
         pygame.draw.circle(screen,(25,67,125),(760,155),64)
         pygame.draw.arc(screen,(80,170,255),(695,120,130,55),0,math.pi,8)
-        text(screen,"NEON",FONT_BIG,WHITE,(66,75))
-        text(screen,"VOID",FONT_BIG,CYAN,(66,137))
+        text(screen,"SPACE",FONT_BIG,WHITE,(66,75))
+        text(screen,"INVADERS",FONT_BIG,CYAN,(66,137))
         text(screen,"COMANDO ESTELAR",FONT_SMALL,(145,190,230),(71,213))
-        items=("INICIAR MISSAO","COMO JOGAR","SAIR")
+        items=("INICIAR MISSAO","COMO JOGAR","CONTROLES","SAIR")
         for i,item in enumerate(items):
-            y=305+i*55; selected=i==self.menu_index
+            y=300+i*52; selected=i==self.menu_index
             if selected:
                 pygame.draw.rect(screen,(15,80,125),(58,y-7,286,42),border_radius=8)
                 pygame.draw.rect(screen,CYAN,(58,y-7,5,42),border_radius=3)
             text(screen,item,FONT,CYAN if selected else (145,165,190),(78,y))
-        text(screen,"W/S ou setas  |  ENTER",FONT_TINY,(105,130,160),(60,500))
-        text(screen,"ARCADE PROTOCOL // v1.0",FONT_TINY,(70,100,130),(WIDTH-25,HEIGHT-20),"bottomright")
+        # Rodape de navegacao com icones do controle conectado.
+        # Fica abaixo de SAIR, em duas linhas, para nao cobrir as opcoes do menu.
+        navigation_hint = (
+            f"SETAS / D-PAD / ANALOGICO: NAVEGAR  |  "
+            f"{controller.button_icon(0)} / ENTER: CONFIRMAR  |  "
+            f"{controller.button_icon(1)} / ESC: VOLTAR"
+        )
+        draw_controller_text(
+            screen, FONT_TINY, navigation_hint, (105, 180, 210),
+            (WIDTH // 2, 508), controller, "center"
+        )
+        text(screen,"F1: ABRIR CONTROLES",FONT_TINY,(105,180,210),(WIDTH // 2,530),"center")
 
     def draw_help(self):
         self.stars.draw(screen)
         text(screen,"COMO JOGAR",FONT_TITLE,CYAN,(WIDTH/2,70),"center")
-        rows=(("WASD / SETAS","Movimentar nave"),("ESPACO","Disparar"),("SHIFT","Impulso de velocidade"),("P","Pausar"),("ESC","Voltar"))
+        rows=(("MOVA A NAVE", "DESVIE DOS INIMIGOS E PROJETEIS"),
+              ("DESTRUA OS ALVOS", "ACUMULE PONTOS E AVANCE AS ONDAS"),
+              ("COLETE POWER-UPS", "RECUPERE VIDA, ESCUDO E MELHORE ARMAS"),
+              ("SOBREVIVA", "A DIFICULDADE AUMENTA A CADA ONDA"))
         for i,(key,desc) in enumerate(rows):
-            y=145+i*55; pygame.draw.rect(screen,(12,24,45),(210,y-7,540,42),border_radius=7)
-            text(screen,key,FONT_SMALL,YELLOW,(235,y+5)); text(screen,desc,FONT_SMALL,WHITE,(430,y+5))
-        text(screen,"Colete S (escudo), + (reparo) e W (arma).",FONT_SMALL,GREEN,(WIDTH/2,450),"center")
-        text(screen,"ESC para voltar",FONT_TINY,(145,165,190),(WIDTH/2,505),"center")
+            y=150+i*65
+            pygame.draw.rect(screen,(12,24,45),(155,y-8,650,48),border_radius=7)
+            text(screen,key,FONT_SMALL,YELLOW,(180,y+5))
+            text(screen,desc,FONT_SMALL,WHITE,(420,y+5))
+        text(screen,"SETAS / D-PAD: NAVEGAR  |  X / A: CONFIRMAR  |  O / B: VOLTAR",FONT_TINY,(145,165,190),(WIDTH/2,490),"center")
 
     def draw_gameover(self):
         self.stars.draw(screen)
@@ -559,14 +616,17 @@ class Game:
     def event(self,e):
         if e.type==pygame.KEYDOWN:
             if self.state=="menu":
-                if e.key in (pygame.K_w,pygame.K_UP): self.menu_index=(self.menu_index-1)%3
-                elif e.key in (pygame.K_s,pygame.K_DOWN): self.menu_index=(self.menu_index+1)%3
+                if e.key in (pygame.K_F1, pygame.K_TAB):
+                    self.menu_index=2; self.state="controls"
+                elif e.key in (pygame.K_w,pygame.K_UP): self.menu_index=(self.menu_index-1)%4
+                elif e.key in (pygame.K_s,pygame.K_DOWN): self.menu_index=(self.menu_index+1)%4
                 elif e.key in (pygame.K_RETURN,pygame.K_SPACE):
                     if self.menu_index==0: self.reset(); self.state="play"
                     elif self.menu_index==1: self.state="help"
+                    elif self.menu_index==2: self.state="controls"
                     else: pygame.quit(); sys.exit()
                 elif e.key==pygame.K_ESCAPE: pygame.quit(); sys.exit()
-            elif self.state=="help" and e.key==pygame.K_ESCAPE: self.state="menu"
+            elif self.state in ("help", "controls") and e.key==pygame.K_ESCAPE: self.state="menu"
             elif self.state=="play":
                 if e.key==pygame.K_p: self.paused=not self.paused
                 elif e.key==pygame.K_ESCAPE: self.state="menu"
@@ -577,11 +637,12 @@ class Game:
     def run(self):
         while True:
             dt=min(clock.tick(FPS)/1000, .033)
-            for e in pygame.event.get():
+            for e in pygame.event.get() + controller.poll_keys():
                 if e.type==pygame.QUIT: pygame.quit(); return
                 self.event(e)
             if self.state=="play": self.update_play(dt); self.draw_play()
             elif self.state=="menu": self.draw_menu()
             elif self.state=="help": self.draw_help()
+            elif self.state=="controls": draw_controls_table(screen, [('MOVER NAVE', 'D-PAD / ANALOGICO', 'D-PAD / ANALOG', 'D-PAD / ANALOG'), ('DISPARAR', 'X', 'A', 'B'), ('IMPULSO / DASH', 'R1', 'RB', 'R'), ('PAUSAR', 'OPTIONS', 'MENU', '+'), ('VOLTAR AO MENU', 'O', 'B', 'A')], title="SPACE INVADERS - CONTROLES")
             else: self.stars.update(.3); self.draw_gameover()
             present()

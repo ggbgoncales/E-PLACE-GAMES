@@ -6,7 +6,8 @@ from game.fighter import Comandos, BOTOES
 
 
 class Teclado:
-    def __init__(self, slot):
+    def __init__(self, slot, controller=None):
+        self.controller = controller if slot == 1 else None
         self.mapa = {acao: pygame.key.key_code(nome)
                      for acao, nome in CONTROLES[slot].items()}
         self.frame = 0
@@ -16,6 +17,18 @@ class Teclado:
         m = self.mapa
         c = Comandos(esquerda=teclas[m["esquerda"]], direita=teclas[m["direita"]],
                      cima=teclas[m["cima"]], baixo=teclas[m["baixo"]])
+        if self.controller and self.controller.connected:
+            eixo_x, eixo_y = self.controller.axis(0), self.controller.axis(1)
+            c.esquerda = c.esquerda or eixo_x < -0.35
+            c.direita = c.direita or eixo_x > 0.35
+            c.cima = c.cima or eixo_y < -0.35
+            c.baixo = c.baixo or eixo_y > 0.35
+            botoes = self.controller.pressed_buttons
+            if 0 in botoes: c.apertou.add("soco")       # A
+            if 2 in botoes: c.apertou.add("chute")      # X
+            if 4 in botoes: c.apertou.add("especial1")  # LB
+            if 5 in botoes: c.apertou.add("especial2")  # RB
+            if 3 in botoes: c.apertou.add("dash")       # Y
         self.frame += 1
         for e in eventos:
             if e.type == pygame.KEYDOWN:

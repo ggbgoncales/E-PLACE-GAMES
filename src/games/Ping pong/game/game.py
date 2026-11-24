@@ -1,8 +1,12 @@
+import json
+import os
+
 import pygame
+from gamepad import XboxController, draw_controller_text, draw_controls_table
 
 from game.entities.ball import Ball
 from game.entities.paddle import Paddle
-from game.ui.text import draw_text
+from game.ui.text import draw_text, get_font
 from settings import (
     ACCENT_COLOR,
     BACKGROUND_COLOR,
@@ -17,12 +21,33 @@ from settings import (
 )
 
 
+RECORDE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "recorde.json")
+
+
+def carregar_vitorias():
+    """Vitorias do jogador contra a CPU (o 'recorde' do Pong)."""
+    try:
+        with open(RECORDE_FILE, "r", encoding="utf-8") as arquivo:
+            return max(0, int(json.load(arquivo).get("recorde", 0)))
+    except (OSError, ValueError, TypeError, json.JSONDecodeError):
+        return 0
+
+
+def salvar_vitorias(valor):
+    try:
+        with open(RECORDE_FILE, "w", encoding="utf-8") as arquivo:
+            json.dump({"recorde": int(valor)}, arquivo)
+    except OSError:
+        pass
+
+
 class Game:
     MENU = 'menu'
     PLAYING = 'playing'
     GAME_OVER = 'game_over'
 
     def __init__(self, screen):
+        self.controller = None
         self.screen = screen
         paddle_y = SCREEN_HEIGHT // 2 - 60
         self.left_paddle = Paddle(PADDLE_MARGIN, paddle_y, ACCENT_COLOR)
@@ -33,24 +58,48 @@ class Game:
         )
         self.ball = Ball()
         self.state = self.MENU
+        self.show_controls = False
+        self.menu_idx = 0
         self.mode = 'cpu'
         self.paused = False
         self.left_score = 0
         self.right_score = 0
         self.winner = ''
+        self.vitorias = carregar_vitorias()
 
     def handle_event(self, event):
         if event.type != pygame.KEYDOWN:
             return
 
-        if self.state == self.MENU:
-            if event.key == pygame.K_1:
-                self.start_match('cpu')
-            elif event.key == pygame.K_2:
-                self.start_match('versus')
-            elif event.key == pygame.K_ESCAPE:
-                pygame.event.post(pygame.event.Event(pygame.QUIT))
+        if self.show_controls:
+            if event.key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_SPACE, pygame.K_F1, pygame.K_F2, pygame.K_TAB, pygame.K_y):
+                self.show_controls = False
             return
+
+        if self.state == self.MENU:
+            # Y no Xbox, triangulo no PlayStation e X no Switch abre controles.
+            if event.key in (pygame.K_y, pygame.K_F1, pygame.K_F2, pygame.K_TAB):
+                self.show_controls = True
+                return
+            if event.key in (pygame.K_UP, pygame.K_w):
+                self.menu_idx = (self.menu_idx - 1) % 4
+                return
+            if event.key in (pygame.K_DOWN, pygame.K_s):
+                self.menu_idx = (self.menu_idx + 1) % 4
+                return
+            if event.key == pygame.K_1:
+                self.start_match('cpu'); return
+            if event.key == pygame.K_2 or event.key == pygame.K_x:
+                self.start_match('versus'); return
+            if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+                if self.menu_idx == 0: self.start_match('cpu')
+                elif self.menu_idx == 1: self.start_match('versus')
+                elif self.menu_idx == 2: self.show_controls = True
+                else: pygame.event.post(pygame.event.Event(pygame.QUIT))
+                return
+            if event.key == pygame.K_ESCAPE:
+                pygame.event.post(pygame.event.Event(pygame.QUIT))
+                return
 
         if event.key == pygame.K_ESCAPE:
             self.state = self.MENU
@@ -78,7 +127,8 @@ class Game:
             return
 
         keys = pygame.key.get_pressed()
-        left_direction = int(keys[pygame.K_s]) - int(keys[pygame.K_w])
+        eixo = self.controller.axis(1) if self.controller else 0.0
+        left_direction = int(keys[pygame.K_s]) - int(keys[pygame.K_w]) + (1 if eixo > .35 else (-1 if eixo < -.35 else 0))
         self.left_paddle.move(left_direction, dt)
 
         if self.mode == 'versus':
@@ -123,6 +173,9 @@ class Game:
         if self.left_score >= WINNING_SCORE:
             self.winner = 'Jogador 1 venceu!'
             self.state = self.GAME_OVER
+            if self.mode == 'cpu':
+                self.vitorias += 1
+                salvar_vitorias(self.vitorias)
         elif self.right_score >= WINNING_SCORE:
             self.winner = 'CPU venceu!' if self.mode == 'cpu' else 'Jogador 2 venceu!'
             self.state = self.GAME_OVER
@@ -135,6 +188,8 @@ class Game:
 
         if self.state == self.MENU:
             self._draw_menu()
+            if self.show_controls:
+                draw_controls_table(self.screen, [('P1 VS CPU', 'X', 'A', 'B'), ('P1 VS P2', 'SQUARE', 'X', 'Y'), ('VOLTAR / SAIR', 'O', 'B', 'A'), ('MOVER P1', 'D-PAD / ANALOGICO', 'D-PAD / ANALOG', 'D-PAD / ANALOG'), ('PAUSAR', 'OPTIONS', 'MENU', '+')], title="PONG - CONTROLES")
             return
 
         self.left_paddle.draw(self.screen)
@@ -158,17 +213,26 @@ class Game:
         pygame.draw.rect(self.screen, (32, 46, 66), self.screen.get_rect(), 4)
 
     def _draw_menu(self):
-        draw_text(self.screen, 'PING PONG', 76, FOREGROUND_COLOR, (SCREEN_WIDTH // 2, 150), True)
-        draw_text(self.screen, 'PYGAME', 26, ACCENT_COLOR, (SCREEN_WIDTH // 2, 210), True)
-        draw_text(self.screen, '1  Jogador vs CPU', 30, FOREGROUND_COLOR, (SCREEN_WIDTH // 2, 320))
-        draw_text(self.screen, '2  Dois jogadores', 30, FOREGROUND_COLOR, (SCREEN_WIDTH // 2, 370))
-        draw_text(self.screen, 'W/S  |  Setas  |  P pausa  |  R reinicia', 20, MUTED_COLOR, (SCREEN_WIDTH // 2, 475))
-        draw_text(self.screen, 'ESC para sair', 18, MUTED_COLOR, (SCREEN_WIDTH // 2, 520))
+        draw_text(self.screen, 'PONG', 76, FOREGROUND_COLOR, (SCREEN_WIDTH // 2, 125), True)
+        draw_text(self.screen, 'ARCADE', 26, ACCENT_COLOR, (SCREEN_WIDTH // 2, 182), True)
+        items = ('1  JOGADOR VS CPU', '2  JOGADORES', 'CONTROLES', 'SAIR')
+        for i, item in enumerate(items):
+            y = 280 + i * 48
+            color = ACCENT_COLOR if i == self.menu_idx else FOREGROUND_COLOR
+            if i == self.menu_idx:
+                highlight = pygame.Rect(SCREEN_WIDTH // 2 - 245, y - 18, 490, 38)
+                pygame.draw.rect(self.screen, (25, 52, 74), highlight, border_radius=9)
+                pygame.draw.rect(self.screen, ACCENT_COLOR, highlight, 2, border_radius=9)
+            draw_text(self.screen, item, 25, color, (SCREEN_WIDTH // 2, y), True)
+        draw_text(self.screen, 'SETAS / D-PAD: NAVEGAR  |  X / A / B: CONFIRMAR', 16, MUTED_COLOR, (SCREEN_WIDTH // 2, 500), True)
+        if self.controller:
+            hint_font = get_font(16)
+            draw_controller_text(self.screen, hint_font, f'ATALHO CONTROLES: {self.controller.button_icon(3)}', ACCENT_COLOR, (SCREEN_WIDTH // 2, 530), self.controller, 'center')
 
     def _draw_score(self):
         draw_text(self.screen, str(self.left_score), 64, ACCENT_COLOR, (SCREEN_WIDTH // 2 - 90, 65), True)
         draw_text(self.screen, str(self.right_score), 64, SECONDARY_COLOR, (SCREEN_WIDTH // 2 + 90, 65), True)
-        mode_text = 'VS CPU' if self.mode == 'cpu' else '2 JOGADORES'
+        mode_text = f'VS CPU  -  VITORIAS: {self.vitorias}' if self.mode == 'cpu' else '2 JOGADORES'
         draw_text(self.screen, mode_text, 17, MUTED_COLOR, (SCREEN_WIDTH // 2, 115), True)
 
     def _draw_overlay(self, title, subtitle):

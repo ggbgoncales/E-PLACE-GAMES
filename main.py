@@ -1,5 +1,5 @@
 """
-Eplace - Launcher de Jogos (minimalista)
+E-Place - Launcher de Jogos (minimalista)
 ========================================
 Tela inicial: imagem de fundo (assets/ui/background.png) + menu central
 (Jogar / Configuracoes / Sair) com animacao subindo/descendo.
@@ -18,6 +18,7 @@ import sys
 import json
 import math
 import subprocess
+from src.gamepad import XboxController
 
 # Janela sem borda do tamanho do monitor (nao troca a resolucao = nao pisca)
 os.environ.setdefault("SDL_VIDEO_WINDOW_POS", "0,0")
@@ -37,6 +38,7 @@ CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 # fundos opcionais
 BG_HOME = os.path.join(UI_DIR, "background.png")
 BG_JOGOS = os.path.join(UI_DIR, "background_jogos.png")
+MUSIC_MENU = os.path.join(BASE_DIR, "assets", "sounds", "eplace_menu.wav")
 
 LARGURA, ALTURA = 1280, 720
 FPS = 60
@@ -46,10 +48,24 @@ BRANCO = (245, 245, 245)
 CINZA = (120, 120, 120)
 DESTAQUE = (255, 255, 255)
 
+
+def fonte_retro(tamanho, titulo):
+    """Titulos em Press Start 2P e textos em VT323 (assets/fonts). Sem os arquivos, usa fonte do sistema."""
+    import os
+    nome = "PressStart2P-Regular.ttf" if titulo else "VT323-Regular.ttf"
+    pasta = os.path.abspath(os.path.dirname(__file__))
+    for _ in range(8):
+        caminho = os.path.join(pasta, "assets", "fonts", nome)
+        if os.path.exists(caminho):
+            return pygame.font.Font(caminho, max(8, int(tamanho)))
+        pasta = os.path.dirname(pasta)
+    return pygame.font.SysFont("arial,helveticaneue,dejavusans", int(tamanho), bold=titulo)
+
+
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-CONFIG_PADRAO = {"tela_cheia": False, "volume": 70, "titulo": "EPLACE"}
+CONFIG_PADRAO = {"tela_cheia": False, "volume": 70, "som_menu": True, "titulo": "EPLACE"}
 
 
 def carregar_config():
@@ -104,7 +120,13 @@ def listar_jogos():
     return jogos
 
 
+# Nomes exibidos no launcher quando diferem do nome da pasta do jogo.
+NOMES_DOS_JOGOS = {"Ping pong": "Pong", "Flappy bird": "Flappy Bird"}
+
+
 def nome_bonito(nome):
+    if nome in NOMES_DOS_JOGOS:
+        return NOMES_DOS_JOGOS[nome]
     if nome.lower().startswith("game") and nome[4:].isdigit():
         return "Game " + nome[4:]
     return nome[:1].upper() + nome[1:]
@@ -119,8 +141,18 @@ class Eplace:
         self.jogo_idx = 0
         self.capas_cache = {}  # Adicione esta linha aqui
         pygame.init()
-        pygame.display.set_caption("Eplace - Launcher")
+        self.controle = XboxController()
+        pygame.display.set_caption("E-Place - Launcher")
         self.cfg = carregar_config()
+        self.som_botao = None
+        self._iniciar_musica_menu()
+        try:
+            caminho_som = os.path.join(BASE_DIR, "assets", "sounds", "menu_click.wav")
+            if os.path.exists(caminho_som) and pygame.mixer.get_init():
+                self.som_botao = pygame.mixer.Sound(caminho_som)
+                self._atualizar_volume_som_botao()
+        except pygame.error:
+            self.som_botao = None
 
         self.gestor = GestorJogador(os.path.join(BASE_DIR, "data"))
 
@@ -129,12 +161,14 @@ class Eplace:
         self._aplicar_tela()
         self.clock = pygame.time.Clock()
 
-        self.f_titulo = pygame.font.SysFont("Arial", 60, bold=True)
-        self.f_menu = pygame.font.SysFont("Arial", 44, bold=True)
-        self.f_item = pygame.font.SysFont("Arial", 34, bold=True)
-        self.f_pequena = pygame.font.SysFont("Arial", 18)
+        self.f_titulo = fonte_retro(40, True)
+        self.f_menu = fonte_retro(28, True)
+        self.f_item = fonte_retro(22, True)
+        self.f_pequena = fonte_retro(24, False)
 
         self.cena = "home"
+        self.origem_recordes = "home"
+        self.recordes = []
         self.rodando = True
         self.t = 0.0                       # tempo pra animacao
 
@@ -180,9 +214,67 @@ class Eplace:
         self.TRANS_DUR = 0.7            # duracao da transicao (segundos)
         self.trans_reversa = False     # False = home->jogos | True = jogos->home
 
+        # Transicao curta de fade para Configuracoes e Recordes.
+        self.trans_tela_ativa = False
+        self.trans_tela_t = 0.0
+        self.TRANS_TELA_DUR = 0.42
+        self.trans_tela_destino = None
+        self.trans_tela_trocou = False
+
         extrair_zips(GAMES_DIR)
         self.jogos = listar_jogos()
         self.jogo_idx = 0
+
+    def _atualizar_volume_som_botao(self):
+        try:
+            if self.som_botao:
+                # Volume dos efeitos e independente do volume da musica.
+                self.som_botao.set_volume(0.45)
+        except pygame.error:
+            pass
+
+    def _tocar_som_botao(self):
+        """Reproduz um clique curto ao navegar ou selecionar itens do menu."""
+        try:
+            if self.cfg.get("som_menu", True) and self.som_botao:
+                self.som_botao.play()
+        except pygame.error:
+            pass
+
+    def _aplicar_som_menu(self):
+        """Liga/desliga somente os efeitos de navegacao do launcher."""
+        try:
+            if not pygame.mixer.get_init():
+                return
+            if self.cfg.get("som_menu", True):
+                self._atualizar_volume_som_botao()
+            elif self.som_botao:
+                self.som_botao.stop()
+        except pygame.error:
+            pass
+
+    def _iniciar_musica_menu(self):
+        """Inicia a trilha do menu independentemente dos efeitos de navegacao."""
+        try:
+            if not pygame.mixer.get_init():
+                pygame.mixer.init(frequency=22050, size=-16, channels=2, buffer=512)
+            if os.path.exists(MUSIC_MENU):
+                pygame.mixer.music.load(MUSIC_MENU)
+                self._atualizar_volume_musica()
+                pygame.mixer.music.play(-1)
+        except pygame.error as erro:
+            # O launcher continua funcionando mesmo em computadores sem áudio.
+            print("Não foi possível iniciar a música do menu:", erro)
+
+    def _atualizar_volume_musica(self):
+        """Aplica imediatamente o volume escolhido nas configurações (0 a 100)."""
+        try:
+            volume = max(0, min(100, int(self.cfg.get("volume", 70))))
+            if pygame.mixer.get_init():
+                # Este controle altera apenas a trilha de fundo.
+                pygame.mixer.music.set_volume(volume / 100.0)
+        except (pygame.error, TypeError, ValueError):
+            pass
 
     def _carregar_bg(self, caminho):
         """Carrega imagem no modo 'cover' (preenche a tela, corta o excesso)."""
@@ -234,6 +326,16 @@ class Eplace:
                 if self.trans_t >= self.TRANS_DUR:
                     # reversa termina na HOME, normal termina em JOGOS
                     self.cena = "home" if self.trans_reversa else "jogos"
+
+            if self.trans_tela_ativa:
+                self.trans_tela_t += dt
+                metade = self.TRANS_TELA_DUR / 2
+                if not self.trans_tela_trocou and self.trans_tela_t >= metade:
+                    self.cena = self.trans_tela_destino
+                    self.trans_tela_trocou = True
+                if self.trans_tela_t >= self.TRANS_TELA_DUR:
+                    self.trans_tela_ativa = False
+                    self.trans_tela_destino = None
             self.eventos()
             self.desenhar()
             self.clock.tick(FPS)
@@ -242,19 +344,31 @@ class Eplace:
 
     # -------------------------------------------------------------- eventos
     def eventos(self):
-        for e in pygame.event.get():
+        eventos = pygame.event.get()
+        eventos.extend(self.controle.poll_keys())
+        for e in eventos:
             if e.type == pygame.QUIT:
                 self.rodando = False
-            elif e.type == pygame.KEYDOWN:
+            elif e.type == pygame.KEYDOWN and not self.trans_tela_ativa:
+                if (self.cena in ("home", "jogos", "config", "recordes") and
+                        e.key in (pygame.K_UP, pygame.K_DOWN, pygame.K_LEFT, pygame.K_RIGHT,
+                                  pygame.K_w, pygame.K_a, pygame.K_s, pygame.K_d,
+                                  pygame.K_RETURN, pygame.K_SPACE, pygame.K_BACKSPACE,
+                                  pygame.K_ESCAPE, pygame.K_h, pygame.K_r)):
+                    self._tocar_som_botao()
                 if self.cena == "home":
                     self._ev_home(e)
                 elif self.cena == "jogos":
                     self._ev_jogos(e)
                 elif self.cena == "config":
                     self._ev_config(e)
+                elif self.cena == "recordes":
+                    self._ev_recordes(e)
 
     def _ev_home(self, e):
-        if e.key in (pygame.K_UP, pygame.K_w):
+        if e.key == pygame.K_h:
+            self._abrir_recordes("home")
+        elif e.key in (pygame.K_UP, pygame.K_w):
             self.menu_idx = (self.menu_idx - 1) % len(self.menu_itens)
         elif e.key in (pygame.K_DOWN, pygame.K_s):
             self.menu_idx = (self.menu_idx + 1) % len(self.menu_itens)
@@ -267,14 +381,16 @@ class Eplace:
                 self.trans_t = 0.0
                 self.cena = "transicao"
             elif escolha == "Configuracoes":
-                self.cena = "config"
+                self._iniciar_transicao_tela("config")
             elif escolha == "Sair":
                 self.rodando = False
         elif e.key == pygame.K_ESCAPE:
             self.rodando = False
 
     def _ev_jogos(self, e):
-        if e.key in (pygame.K_UP, pygame.K_w):
+        if e.key == pygame.K_h:
+            self._abrir_recordes("jogos")
+        elif e.key in (pygame.K_UP, pygame.K_w):
             if self.jogos:
                 self.jogo_idx = (self.jogo_idx - 1) % len(self.jogos)
         elif e.key in (pygame.K_DOWN, pygame.K_s):
@@ -289,8 +405,55 @@ class Eplace:
             self.trans_t = 0.0
             self.cena = "transicao"
 
+    def _iniciar_transicao_tela(self, destino):
+        """Faz fade-out, troca a tela no escuro e faz fade-in."""
+        if self.trans_tela_ativa:
+            return
+        self.trans_tela_ativa = True
+        self.trans_tela_t = 0.0
+        self.trans_tela_destino = destino
+        self.trans_tela_trocou = False
+
+    def _abrir_recordes(self, origem):
+        self.origem_recordes = origem
+        self.recordes = self._carregar_recordes()
+        self._iniciar_transicao_tela("recordes")
+
+    def _ev_recordes(self, e):
+        if e.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE, pygame.K_h):
+            self._iniciar_transicao_tela(self.origem_recordes)
+        elif e.key == pygame.K_r:
+            self.recordes = self._carregar_recordes()
+
+    def _ler_json(self, caminho, chave, padrao=0):
+        try:
+            with open(caminho, "r", encoding="utf-8") as arquivo:
+                dados = json.load(arquivo)
+            return max(0, int(dados.get(chave, padrao)))
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            return 0
+
+    def _carregar_recordes(self):
+        cobrinha = os.path.join(os.path.expanduser("~"), ".cobra_neon_recorde.txt")
+        try:
+            with open(cobrinha, "r", encoding="utf-8") as arquivo:
+                recorde_cobrinha = max(0, int(arquivo.read().strip()))
+        except (OSError, ValueError):
+            recorde_cobrinha = 0
+
+        base_jogos = GAMES_DIR
+        dados = [
+            ("Snake", recorde_cobrinha, "pontos"),
+            ("Flappy Bird", self._ler_json(os.path.join(base_jogos, "Flappy bird", "savegame.json"), "best"), "pontos"),
+            ("Frogger", self._ler_json(os.path.join(base_jogos, "Frogger", "recorde.json"), "recorde"), "pontos"),
+            ("Space Invaders", self._ler_json(os.path.join(base_jogos, "Space Invaders", "highscore.json"), "recorde"), "pontos"),
+            ("Pong", self._ler_json(os.path.join(base_jogos, "Ping pong", "recorde.json"), "recorde"), "vitorias"),
+            ("Kombate", self._ler_json(os.path.join(base_jogos, "Kombate", "recorde.json"), "recorde"), "vitorias"),
+        ]
+        return sorted(dados, key=lambda item: item[1] if item[1] is not None else -1, reverse=True)
+
     def _ev_config(self, e):
-        opcoes = ["tela_cheia", "volume", "voltar"]
+        opcoes = ["tela_cheia", "volume", "som_menu", "voltar"]
         if e.key in (pygame.K_UP, pygame.K_w):
             self.config_idx = (self.config_idx - 1) % len(opcoes)
         elif e.key in (pygame.K_DOWN, pygame.K_s):
@@ -304,13 +467,24 @@ class Eplace:
             elif alvo == "volume":
                 self.cfg["volume"] = max(
                     0, min(100, self.cfg["volume"] + direcao * 5))
-        elif e.key in (pygame.K_RETURN, pygame.K_SPACE):
-            if opcoes[self.config_idx] == "voltar":
+                self._atualizar_volume_musica()
                 salvar_config(self.cfg)
-                self.cena = "home"
+            elif alvo == "som_menu":
+                self.cfg["som_menu"] = not self.cfg.get("som_menu", True)
+                self._aplicar_som_menu()
+                salvar_config(self.cfg)
+        elif e.key in (pygame.K_RETURN, pygame.K_SPACE):
+            alvo = opcoes[self.config_idx]
+            if alvo == "som_menu":
+                self.cfg["som_menu"] = not self.cfg.get("som_menu", True)
+                self._aplicar_som_menu()
+                salvar_config(self.cfg)
+            elif alvo == "voltar":
+                salvar_config(self.cfg)
+                self._iniciar_transicao_tela("home")
         elif e.key == pygame.K_ESCAPE:
             salvar_config(self.cfg)
-            self.cena = "home"
+            self._iniciar_transicao_tela("home")
 
     def _aplicar_tela(self):
         if self.cfg.get("tela_cheia"):
@@ -348,6 +522,18 @@ class Eplace:
         env = os.environ.copy()
         env["SDL_VIDEO_WINDOW_POS"] = "0,0"
         env["SDL_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR"] = "0"
+        # Permite que os jogos importem o modulo compartilhado de controle.
+        env["PYTHONPATH"] = SRC_DIR + os.pathsep + env.get("PYTHONPATH", "")
+        # O launcher continua aberto em segundo plano, mas a musica do menu
+        # deve ficar pausada enquanto o jogo estiver em primeiro plano.
+        musica_pausada = False
+        try:
+            if pygame.mixer.get_init() and pygame.mixer.music.get_busy():
+                pygame.mixer.music.pause()
+                musica_pausada = True
+        except pygame.error:
+            pass
+
         try:
             proc = subprocess.Popen([sys.executable, jogo["main"]],
                                     cwd=jogo["caminho"], env=env)
@@ -357,6 +543,14 @@ class Eplace:
                 self.clock.tick(15)
         except Exception as ex:
             print("Erro ao iniciar o jogo:", ex)
+        finally:
+            # Retoma a trilha do ponto em que foi pausada ao voltar ao menu.
+            if musica_pausada:
+                try:
+                    if pygame.mixer.get_init():
+                        pygame.mixer.music.unpause()
+                except pygame.error:
+                    pass
 
         # Jogo fechou: volta direto para a tela inicial
         pygame.event.clear()
@@ -388,6 +582,24 @@ class Eplace:
             self._draw_jogos()
         elif self.cena == "config":
             self._draw_config()
+        elif self.cena == "recordes":
+            self._draw_recordes()
+
+        # Camada de fade por cima da cena atual; a troca ocorre no preto.
+        if self.trans_tela_ativa:
+            progresso = min(1.0, self.trans_tela_t / self.TRANS_TELA_DUR)
+            metade = 0.5
+            if progresso < metade:
+                fase = progresso / metade
+            else:
+                fase = (1.0 - progresso) / metade
+            # smoothstep para evitar uma variacao brusca de opacidade
+            fase = max(0.0, min(1.0, fase))
+            fase = fase * fase * (3.0 - 2.0 * fase)
+            camada = pygame.Surface((LARGURA, ALTURA), pygame.SRCALPHA)
+            camada.fill((0, 0, 0, int(255 * fase)))
+            self.tela.blit(camada, (0, 0))
+
         self._apresentar()
 
     def _fundo(self, bg):
@@ -440,7 +652,7 @@ class Eplace:
             self.tela.blit(s, (sel.x - k, sel.y - k))
         pygame.draw.rect(self.tela, DESTAQUE, sel, width=4, border_radius=14)
 
-        self._rodape("SETAS mover   |   ENTER selecionar   |   ESC sair")
+        self._rodape("SETAS / ANALOGICO mover   |   A selecionar   |   B voltar   |   QUADRADO / X / Y recordes")
 
     # ---- TRANSICAO: logo desliza pro canto sup. esquerdo (marca dagua) ----
     def _marca_dagua_alvo(self):
@@ -486,31 +698,42 @@ class Eplace:
             self._rodape("ESC voltar")
             return
 
-        x_dir = LARGURA - 90
+        x_dir = LARGURA - 70
         centro_y = ALTURA // 2
         espaco = 74
 
-        # Exibir capa do jogo selecionado
+        # Capa em destaque, centralizada e preservando a proporcao original.
         jogo_atual = self.jogos[self.jogo_idx]
         caminho_capa = jogo_atual.get("capa")
-
         if caminho_capa:
             if caminho_capa not in self.capas_cache:
                 try:
-                    img = pygame.image.load(caminho_capa).convert_alpha()
-                    # Redimensiona para um tamanho fixo (ex: 500x350)
-                    img = pygame.transform.smoothscale(img, (500, 350))
-                    self.capas_cache[caminho_capa] = img
-                except:
+                    original = pygame.image.load(caminho_capa).convert_alpha()
+                    iw, ih = original.get_size()
+                    # Capas quadradas: manter a proporcao e limitar ao mesmo espaco.
+                    escala = min(378 / iw, 378 / ih)
+                    tamanho = (max(1, int(iw * escala)), max(1, int(ih * escala)))
+                    self.capas_cache[caminho_capa] = pygame.transform.smoothscale(original, tamanho)
+                except (pygame.error, OSError):
                     self.capas_cache[caminho_capa] = None
 
             capa_img = self.capas_cache[caminho_capa]
             if capa_img:
-                rect = capa_img.get_rect(
-                    center=(LARGURA // 2 - 150, ALTURA // 2))
+                centro_capa = (570, centro_y)
+                rect = capa_img.get_rect(center=centro_capa)
+
+                # Moldura quadrada, acompanhando o formato 1:1 das capas.
+                margem = 9
+                moldura = rect.inflate(margem * 2, margem * 2)
+                sombra = moldura.move(7, 9)
+                pygame.draw.rect(self.tela, (0, 0, 0), sombra, border_radius=8)
+                pygame.draw.rect(self.tela, (12, 19, 36), moldura, border_radius=8)
+                pygame.draw.rect(self.tela, (35, 225, 190), moldura, width=3, border_radius=8)
+                externa = moldura.inflate(8, 8)
+                pygame.draw.rect(self.tela, (90, 120, 255), externa, width=2, border_radius=10)
+
                 self.tela.blit(capa_img, rect)
-                pygame.draw.rect(self.tela, DESTAQUE, rect,
-                                 width=3, border_radius=4)
+                pygame.draw.rect(self.tela, (235, 245, 255), rect, width=1)
 
         for i, jogo in enumerate(self.jogos):
             offset = i - self.jogo_idx
@@ -539,17 +762,62 @@ class Eplace:
                                  border_radius=2)
 
         self._rodape(
-            "SETAS cima/baixo   |   ENTER jogar   |   BACKSPACE / ESC voltar (animado)")
+            "DIRECIONAL / ANALOGICO mover   |   A jogar   |   B voltar")
+
+    def _draw_recordes(self):
+        self._fundo(self.bg_jogos)
+        camada = pygame.Surface((LARGURA, ALTURA), pygame.SRCALPHA)
+        camada.fill((3, 5, 18, 220))
+        self.tela.blit(camada, (0, 0))
+
+        titulo = self.f_titulo.render("RECORDES", True, (90, 220, 255))
+        self.tela.blit(titulo, titulo.get_rect(center=(LARGURA // 2, 82)))
+        subtitulo = self.f_pequena.render("RECORDES PESSOAIS DOS JOGOS", True, (170, 190, 220))
+        self.tela.blit(subtitulo, subtitulo.get_rect(center=(LARGURA // 2, 128)))
+
+        medalhas = [(255, 205, 70), (190, 205, 220), (205, 135, 85)]
+        inicio_y = 190
+        for i, (nome, pontos, detalhe) in enumerate(self.recordes):
+            y = inicio_y + i * 72
+            cartao = pygame.Rect(250, y - 27, 780, 56)
+            pygame.draw.rect(self.tela, (13, 25, 48), cartao, border_radius=9)
+            cor_borda = medalhas[i] if i < 3 and pontos is not None and pontos > 0 else (45, 75, 105)
+            pygame.draw.rect(self.tela, cor_borda, cartao, width=2, border_radius=9)
+
+            posicao = self.f_item.render(f"#{i + 1}", True, cor_borda)
+            self.tela.blit(posicao, (cartao.x + 18, cartao.y + 9))
+            nome_img = self.f_item.render(nome, True, BRANCO)
+            self.tela.blit(nome_img, (cartao.x + 95, cartao.y + 9))
+
+            if pontos is None:
+                valor_txt = detalhe.upper()
+                cor_valor = (145, 155, 175)
+            elif pontos == 0:
+                valor_txt = "SEM RECORDE"
+                cor_valor = (145, 155, 175)
+            else:
+                unidade = "PTS" if detalhe == "pontos" else detalhe.upper()
+                valor_txt = f"{pontos:,} {unidade}".replace(",", ".")
+                cor_valor = (90, 235, 180)
+            valor_img = self.f_pequena.render(valor_txt, True, cor_valor)
+            self.tela.blit(valor_img, valor_img.get_rect(midright=(cartao.right - 20, cartao.centery)))
+
+        self._rodape("R atualizar   |   ESC / BACKSPACE voltar")
 
     def _draw_config(self):
         self._fundo(None)
         titulo = self.f_titulo.render("CONFIGURACOES", True, BRANCO)
         self.tela.blit(titulo, titulo.get_rect(center=(LARGURA // 2, 120)))
+        status_controle = (f"CONTROLE: {self.controle.device_name.upper()} CONECTADO"
+                           if self.controle.connected else "CONTROLE: DESCONECTADO")
+        cor_controle = (70, 230, 160) if self.controle.connected else (150, 150, 150)
+        status_img = self.f_pequena.render(status_controle, True, cor_controle)
+        self.tela.blit(status_img, status_img.get_rect(center=(LARGURA // 2, 185)))
 
         opcoes = [
-            ("Tela cheia",
-             "LIGADO" if self.cfg["tela_cheia"] else "DESLIGADO"),
-            ("Volume", f"{self.cfg['volume']}%"),
+            ("Tela cheia", "LIGADO" if self.cfg["tela_cheia"] else "DESLIGADO"),
+            ("Volume da música", f"{self.cfg['volume']}%"),
+            ("Sons de navegação", "LIGADOS" if self.cfg.get("som_menu", True) else "DESLIGADOS"),
             ("Voltar", ""),
         ]
         cx = LARGURA // 2
@@ -564,8 +832,19 @@ class Eplace:
             self.tela.blit(txt, txt.get_rect(
                 center=(cx, base_y + i * 78 + dy)))
 
+            # Barra visual do volume: acompanha em tempo real as setas esquerda/direita.
+            if i == 1:
+                barra = pygame.Rect(cx - 150, base_y + 1 * 78 + 28, 300, 12)
+                pygame.draw.rect(self.tela, (45, 55, 75), barra, border_radius=6)
+                preenchido = barra.copy()
+                preenchido.width = int(barra.width * self.cfg["volume"] / 100)
+                if preenchido.width > 0:
+                    pygame.draw.rect(self.tela, (0, 220, 255), preenchido, border_radius=6)
+                x_knob = barra.x + int(barra.width * self.cfg["volume"] / 100)
+                pygame.draw.circle(self.tela, (255, 255, 255), (x_knob, barra.centery), 9)
+
         self._rodape(
-            "SETAS mover / alterar   |   ENTER confirmar   |   ESC voltar")
+            "SETAS mover / alterar   |   ENTER alternar / selecionar   |   ESC voltar")
 
     def _rodape(self, texto):
         t = self.f_pequena.render(texto, True, CINZA)
