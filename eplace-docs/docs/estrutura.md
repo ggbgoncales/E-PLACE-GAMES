@@ -26,6 +26,7 @@ Eplace Games/
 │   └── highscore.json    # Pontuações globais
 ├── tests/                # Testes automáticos (unittest)
 ├── eplace-docs/          # Este site (Docusaurus)
+├── .github/workflows/    # Testes e build da documentação
 └── src/
     ├── jogador.py        # GestorJogador
     ├── utils/
@@ -95,7 +96,7 @@ O projeto tem 27 testes automáticos (`unittest`, sem dependências extras), que
 python -m unittest discover -s tests -t .
 ```
 
-Eles cobrem a descoberta de jogos do launcher, a leitura dos recordes, o recorde de vitórias do Pong e do Kombate, as regras de rounds e K.O. do Kombate e o módulo `score.py`.
+Eles cobrem a descoberta de jogos do launcher, a leitura dos recordes, o recorde de vitórias do Pong e do Kombate, as regras de rounds e K.O. do Kombate e o módulo `score.py`. A cada push e pull request, o GitHub Actions roda esses testes.
 
 ## Boas práticas adotadas
 

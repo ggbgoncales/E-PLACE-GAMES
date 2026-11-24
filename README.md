@@ -78,6 +78,7 @@ Esses arquivos são gerados ao jogar e não vão para o repositório (`.gitignor
 │   ├── utils/            # score.py e zip_extractor.py
 │   └── games/            # Um jogo por pasta, cada um com seu main.py
 ├── tests/                # Testes automáticos (unittest)
+├── .github/workflows/    # GitHub Actions: testes e build da documentação
 └── eplace-docs/          # Site de documentação (Docusaurus)
 ```
 
@@ -97,7 +98,7 @@ Os testes usam só a biblioteca padrão do Python (`unittest`) e rodam sem abrir
 python -m unittest discover -s tests -t .
 ```
 
-Eles cobrem a descoberta de jogos do launcher, a leitura dos recordes, o recorde de vitórias do Pong e do Kombate, as regras de rounds e K.O. do Kombate e o módulo `score.py`.
+Eles cobrem a descoberta de jogos do launcher, a leitura dos recordes, o recorde de vitórias do Pong e do Kombate, as regras de rounds e K.O. do Kombate e o módulo `score.py`. A cada push e pull request, o GitHub Actions roda esses testes (`.github/workflows/tests.yml`).
 
 ## Documentação
 
@@ -113,9 +114,14 @@ npm start
 
 O site abre em `http://localhost:3000/E-PLACE-GAMES/`. Para gerar a versão final: `npm run build`.
 
-### Publicação
+### Publicação no GitHub Pages
 
-O site é estático: `npm run build` gera a pasta `eplace-docs/build`, que pode ser publicada em qualquer hospedagem (por exemplo, o GitHub Pages). A configuração atual já aponta para `https://ggbgoncales.github.io/E-PLACE-GAMES/`. Se o repositório mudar de dono ou nome, ajuste `url`, `baseUrl`, `organizationName` e `projectName` em `eplace-docs/docusaurus.config.js`.
+O workflow `.github/workflows/docs.yml` compila o site a cada alteração em `eplace-docs/`. Para publicar:
+
+1. Um administrador do repositório ativa **Settings → Pages → Source: GitHub Actions**.
+2. Em **Actions → Documentação → Run workflow**, rode o fluxo manualmente.
+
+O endereço fica em `https://ggbgoncales.github.io/E-PLACE-GAMES/`. Se o repositório mudar de dono ou nome, ajuste `url`, `baseUrl`, `organizationName` e `projectName` em `eplace-docs/docusaurus.config.js`.
 
 ## Equipe
 

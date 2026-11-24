@@ -31,4 +31,4 @@ npm run serve
 
 ## Publicação
 
-O site é estático: `npm run build` gera a pasta `build/`, que pode ser publicada em qualquer hospedagem (por exemplo, o GitHub Pages). A configuração atual aponta para `https://ggbgoncales.github.io/E-PLACE-GAMES/`. Se o repositório mudar de dono ou nome, ajuste `url`, `baseUrl`, `organizationName` e `projectName` em `docusaurus.config.js`.
+O site é publicado no GitHub Pages em `https://ggbgoncales.github.io/E-PLACE-GAMES/`, pelo workflow `.github/workflows/docs.yml` (na raiz do repositório): **Actions → Documentação → Run workflow**. Antes, um administrador precisa ativar **Settings → Pages → Source: GitHub Actions**. Se o repositório mudar de dono ou nome, ajuste `url`, `baseUrl`, `organizationName` e `projectName` em `docusaurus.config.js`.
