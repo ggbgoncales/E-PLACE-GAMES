@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pygame
+from utils import ui_arcade as ui
 from gamepad import XboxController, draw_controller_text, draw_controls_table
 
 # ============================================================
@@ -145,15 +146,11 @@ class Button:
         self.hover += (target - self.hover) * min(1, dt * 12)
 
     def draw(self, surface, font):
-        grow = int(4 * self.hover)
-        rect = self.rect.inflate(grow, grow)
-        shadow = rect.move(0, 7)
-        pygame.draw.rect(surface, (3, 7, 14), shadow, border_radius=16)
-        color = tuple(int(PANEL[i] + (self.accent[i] - PANEL[i]) * (0.28 + self.hover * 0.18)) for i in range(3))
-        pygame.draw.rect(surface, color, rect, border_radius=16)
-        pygame.draw.rect(surface, self.accent, rect, 2, border_radius=16)
-        label = font.render(self.text, True, WHITE)
-        surface.blit(label, label.get_rect(center=rect.center))
+        t = pygame.time.get_ticks() / 1000
+        selecionado = self.hover > 0.5
+        ui.fundo_item(surface, self.rect, self.accent, selecionado, t, raio=14)
+        cor = ui.TEXTO if selecionado else ui.misturar(ui.TEXTO3, self.accent, 0.35)
+        ui.texto(surface, font, self.text, cor, self.rect.center, "center")
 
 
 def fonte_retro(tamanho, titulo):
@@ -233,10 +230,10 @@ class SnakeGame:
 
     def make_menu_buttons(self):
         self.buttons = [
-            Button((WIDTH // 2 - 155, 390, 310, 52), "JOGAR", "play", GREEN),
-            Button((WIDTH // 2 - 155, 452, 310, 52), "DIFICULDADE", "difficulty", CYAN),
-            Button((WIDTH // 2 - 155, 514, 310, 52), "CONTROLES", "controls", CYAN),
-            Button((WIDTH // 2 - 155, 576, 310, 52), "SAIR", "quit", PINK),
+            Button((WIDTH // 2 - 195, 372, 390, 52), "JOGAR", "play", GREEN),
+            Button((WIDTH // 2 - 195, 434, 390, 52), "DIFICULDADE", "difficulty", CYAN),
+            Button((WIDTH // 2 - 195, 496, 390, 52), "CONTROLES", "controls", CYAN),
+            Button((WIDTH // 2 - 195, 558, 390, 52), "SAIR", "quit", PINK),
         ]
 
     def set_state(self, action):
@@ -570,37 +567,28 @@ class SnakeGame:
             button.draw(self.canvas, self.font_btn)
         # Rodape de navegacao do menu: controles sempre visiveis junto do atalho.
         shortcut_font = fonte_retro(15, False)
-        navigation_hint = (
-            f"SETAS / D-PAD / ANALOGICO: NAVEGAR  |  "
-            f"{controller.button_icon(0)} / ENTER: CONFIRMAR  |  "
-            f"{controller.button_icon(1)} / ESC: VOLTAR"
-        )
-        draw_controller_text(
-            self.canvas, shortcut_font, navigation_hint, MUTED,
-            (WIDTH // 2, 660), controller, "center"
-        )
+        ui.rodape_atalhos(self.canvas, ui.fonte(11, True), ui.fonte(22, False),
+                          [("SETAS", "Navegar"), ("ENTER", "Confirmar"), ("M", "Som"), ("F11", "Tela cheia")],
+                          640, WIDTH)
         draw_controller_text(
             self.canvas, shortcut_font,
             f"ATALHO CONTROLES: {controller.button_icon(3)}",
-            MUTED, (WIDTH // 2, 688), controller, "center"
+            MUTED, (WIDTH // 2, 684), controller, "center"
         )
 
     def draw_overlay(self, game_over=False):
-        shade = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-        shade.fill((3, 7, 15, 195))
-        self.canvas.blit(shade, (0, 0))
-        title = "FIM DE JOGO" if game_over else "PAUSADO"
-        color = PINK if game_over else CYAN
-        label = self.font_lg.render(title, True, color)
-        self.canvas.blit(label, label.get_rect(center=(PLAY_W // 2, 265)))
+        rect = pygame.Rect(0, 0, 560, 250)
+        rect.center = (PLAY_W // 2, HEIGHT // 2)
+        titulo = "FIM DE JOGO" if game_over else "PAUSADO"
+        cor = ui.ROSA if game_over else ui.CIANO
         if game_over:
-            line = self.font_md.render(f"Pontuacao: {self.score}   |   Recorde: {self.record}", True, WHITE)
-            hint = self.font_sm.render("ENTER para tentar novamente  |  ESC para o menu", True, MUTED)
+            linhas = [f"Pontuacao: {self.score}", f"Recorde: {self.record}"]
+            atalhos = [("ENTER", "Tentar de novo"), ("ESC", "Menu")]
         else:
-            line = self.font_md.render("Respira... a cobra esta esperando.", True, WHITE)
-            hint = self.font_sm.render("P ou ESC para continuar", True, MUTED)
-        self.canvas.blit(line, line.get_rect(center=(PLAY_W // 2, 335)))
-        self.canvas.blit(hint, hint.get_rect(center=(PLAY_W // 2, 390)))
+            linhas = ["Respira... a cobra esta esperando."]
+            atalhos = [("P", "Continuar"), ("ESC", "Menu")]
+        ui.modal(self.canvas, rect, titulo, cor, ui.fonte(30, True), linhas, ui.fonte(28, False), ui.TEXTO)
+        ui.rodape_atalhos(self.canvas, ui.fonte(11, True), ui.fonte(22, False), atalhos, rect.bottom - 56, PLAY_W)
 
     def draw(self):
         if self.state == "menu":

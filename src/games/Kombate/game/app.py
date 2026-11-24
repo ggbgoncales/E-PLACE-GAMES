@@ -10,6 +10,7 @@ os.environ["SDL_VIDEO_WINDOW_POS"] = "0,0"
 os.environ["SDL_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR"] = "0"
 
 import pygame
+from utils import ui_arcade as ui
 from gamepad import XboxController, draw_controller_text, draw_controls_table
 
 from settings import LARGURA, ALTURA, FPS, TITULO, CONTROLES, NIVEL_CPU, CHAO_Y
@@ -171,16 +172,12 @@ class App:
         self.mapas[self.mapa_idx].desenhar(self.tela, self.t)
 
     def _botao(self, rotulo, centro, sel, largura=520):
+        """Botão no estilo comum dos menus do E-Place, na cor vermelha do Kombate."""
         r = pygame.Rect(0, 0, largura, 54)
         r.center = centro
-        if sel:
-            glow(self.tela, (110, 25, 20), r.center, largura // 2 + 30, 0.9)
-            pts = [(r.x + 18, r.y), (r.right, r.y), (r.right - 18, r.bottom), (r.x, r.bottom)]
-            pygame.draw.polygon(self.tela, (200, 40, 35), pts)
-            pygame.draw.polygon(self.tela, (255, 190, 120), pts, 2)
-            texto(self.tela, rotulo, self.fontes["media"], (255, 255, 255), centro)
-        else:
-            texto(self.tela, rotulo, self.fontes["media"], (205, 190, 195), centro)
+        ui.fundo_item(self.tela, r, ui.VERMELHO, sel, self.t / 60.0, raio=14)
+        cor = ui.TEXTO if sel else ui.misturar(ui.TEXTO3, ui.VERMELHO, 0.35)
+        ui.texto(self.tela, ui.fonte(16, True), rotulo, cor, centro, "center")
 
     # ================================================================ demo (fundo do menu)
     def _atualizar_demo(self):
@@ -256,8 +253,9 @@ class App:
                     texto(self.tela, ">", self.fontes["media"], (255, 255, 255), (LARGURA // 2 + 72, y))
             else:
                 self._botao(item, (LARGURA // 2, y), i == self.menu_idx)
-        texto(self.tela, "SELECIONE CONTROLES NO MENU  |  F1: ATALHO PELO TECLADO",
-              self.fontes["mini"], (200, 185, 190), (LARGURA // 2, ALTURA - 34))
+        ui.rodape_atalhos(self.tela, ui.fonte(10, True), ui.fonte(22, False),
+                          [("SETAS", "Navegar"), ("ENTER", "Confirmar"), ("F1", "Controles"), ("ESC", "Sair")],
+                          ALTURA - 56, LARGURA, fundo=True)
 
     # ================================================================ controles
     def cena_controles(self, eventos):

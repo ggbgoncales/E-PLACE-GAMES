@@ -6,6 +6,7 @@ import math
 import random
 from pathlib import Path
 import pygame
+from utils import ui_arcade as ui
 from gamepad import XboxController, draw_controller_text, draw_controls_table
 from settings import WIDTH, HEIGHT, FPS, TITLE, GRAVITY, FLAP_FORCE, PIPE_SPEED, PIPE_GAP, SAVE_FILE
 pygame.mixer.pre_init(44100, -16, 2, 512)
@@ -272,16 +273,14 @@ class Game:
         text(screen,"FLAPPY",FONT_BIG,WHITE,(WIDTH//2,85),"center")
         text(screen,"BIRD",FONT_BIG,YELLOW,(WIDTH//2,137),"center")
         text(screen,"SKYWARD EDITION",SMALL,WHITE,(WIDTH//2,181),"center")
-        panel(screen,pygame.Rect(OX+75,365,330,190),(10,35,58,205),(255,255,255,90))
-        items=("JOGAR","CUSTOMIZAR","CONTROLES","SAIR")
-        for i,item in enumerate(items):
-            r=pygame.Rect(OX+104,378+i*43,272,36)
-            if i==self.menu_idx: pygame.draw.rect(screen,(255,198,45),r,border_radius=12); pygame.draw.rect(screen,WHITE,r,2,border_radius=12)
-            text(screen,item,FONT,INK if i==self.menu_idx else WHITE,r.center,"center")
+        t=pygame.time.get_ticks()/1000
+        ui.painel(screen,pygame.Rect(OX+62,352,356,226),borda=ui.LINHA,fundo=ui.PAINEL,raio=18,alfa=215)
+        ui.lista_menu(screen,("JOGAR","CUSTOMIZAR","CONTROLES","SAIR"),self.menu_idx,ui.AMARELO,ui.fonte(15,True),
+                      WIDTH//2,368,310,42,10,t,cores=(ui.AMARELO,ui.ROSA,ui.CIANO,ui.VERMELHO),raio=12)
         pygame.draw.circle(screen,YELLOW,(34,34),16); text(screen,self.save.data["coins"],SMALL,WHITE,(58,34),"midleft")
         text(screen,f"RECORDE {self.save.data['best']}",SMALL,WHITE,(WIDTH-18,27),"topright")
-        text(screen,"SETAS / D-PAD: NAVEGAR  |  X / A: CONFIRMAR  |  O / B: VOLTAR",TINY,WHITE,(WIDTH//2,620),"center")
-        draw_controller_text(screen,TINY,f"ATALHO CONTROLES: {controller.button_icon(3)}",CYAN,(WIDTH//2,646),controller,"center")
+        ui.rodape_atalhos(screen,ui.fonte(10,True),ui.fonte(20,False),[("SETAS","Navegar"),("ENTER","Confirmar"),("ESC","Sair")],598,WIDTH,fundo=True)
+        draw_controller_text(screen,TINY,f"ATALHO CONTROLES: {controller.button_icon(3)}",CYAN,(WIDTH//2,664),controller,"center")
     def draw_play(self):
         self.background()
         for p in self.pipes: p.draw(screen,self.gap)
@@ -296,14 +295,18 @@ class Game:
             draw_controller_text(screen,FONT,f"ESPAÇO / {jump} PARA VOAR",WHITE,(WIDTH//2,423),controller,"center")
             text(screen,"Passe pelos canos e ganhe moedas",TINY,WHITE,(WIDTH//2,458),"center")
     def draw_over(self):
-        self.draw_play(); shade=pygame.Surface((WIDTH,HEIGHT),pygame.SRCALPHA); shade.fill((4,18,35,135)); screen.blit(shade,(0,0))
-        panel(screen,pygame.Rect(OX+62,185,356,300),(248,252,255,240),(255,255,255,255))
-        text(screen,"FIM DE JOGO",FONT_TITLE,INK,(WIDTH//2,220),"center")
-        pygame.draw.circle(screen,YELLOW,(OX+150,305),47); text(screen,self.score,FONT_TITLE,INK,(OX+150,303),"center"); text(screen,"PONTOS",TINY,INK,(OX+150,342),"center",False)
-        pygame.draw.circle(screen,CYAN,(OX+330,305),47); text(screen,self.save.data["best"],FONT_TITLE,INK,(OX+330,303),"center"); text(screen,"RECORDE",TINY,INK,(OX+330,342),"center",False)
-        text(screen,f"+ {self.score} MOEDAS",SMALL,ORANGE,(WIDTH//2,382),"center")
-        pygame.draw.rect(screen,YELLOW,(OX+96,416,288,44),border_radius=13); text(screen,"JOGAR NOVAMENTE",FONT,INK,(OX+240,437),"center")
-        text(screen,"ESC para o menu",TINY,INK,(WIDTH//2,472),"center",False)
+        self.draw_play(); shade=pygame.Surface((WIDTH,HEIGHT),pygame.SRCALPHA); shade.fill((4,10,26,150)); screen.blit(shade,(0,0))
+        r=pygame.Rect(OX+50,170,380,330)
+        ui.brilho(screen,r,ui.AMARELO,intensidade=60,raio=18,camadas=3)
+        ui.painel(screen,r,borda=ui.AMARELO,fundo=ui.PAINEL,raio=18,largura_borda=3)
+        ui.texto(screen,ui.fonte(20,True),"FIM DE JOGO",ui.AMARELO,(WIDTH//2,r.y+44),"center",sombra=True)
+        for k,(rot,val,cor) in enumerate((("PONTOS",self.score,ui.AMARELO),("RECORDE",self.save.data["best"],ui.CIANO))):
+            cr=pygame.Rect(r.x+24+k*168,r.y+84,164,108)
+            ui.painel(screen,cr,borda=ui.LINHA,fundo=ui.PAINEL2,raio=12)
+            ui.texto(screen,ui.fonte(22,False),rot,ui.TEXTO3,(cr.centerx,cr.y+24),"center")
+            ui.texto(screen,ui.fonte(28,True),val,cor,(cr.centerx,cr.y+70),"center")
+        ui.texto(screen,ui.fonte(28,False),f"+ {self.score} MOEDAS",ui.AMARELO,(WIDTH//2,r.y+232),"center")
+        ui.rodape_atalhos(screen,ui.fonte(10,True),ui.fonte(22,False),[("ESPACO","Jogar de novo"),("ESC","Menu")],r.bottom-56,WIDTH)
     def current_shop(self): return self.HATS if self.shop_tab==0 else (self.EFFECTS if self.shop_tab==1 else self.SKINS)
     def draw_shop_preview(self,item_id):
         preview=Bird(item_id if self.shop_tab==0 else self.save.data["hat"],item_id if self.shop_tab==1 else self.save.data["effect"],item_id if self.shop_tab==2 else self.save.data.get("skin","gold"))

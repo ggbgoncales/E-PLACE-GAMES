@@ -74,6 +74,23 @@ class FundoArcade:
         tela.blit(self.scan, (0, 0))
 
 
+_FONTES = {}
+
+
+def fonte(tamanho, titulo=False):
+    """Press Start 2P (titulo=True) ou VT323, de assets/fonts; cai para uma fonte do sistema se faltar."""
+    import os
+    chave = (int(tamanho), bool(titulo))
+    if chave not in _FONTES:
+        nome = "PressStart2P-Regular.ttf" if titulo else "VT323-Regular.ttf"
+        caminho = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "assets", "fonts", nome)
+        try:
+            _FONTES[chave] = pygame.font.Font(caminho, max(8, int(tamanho)))
+        except (OSError, pygame.error):
+            _FONTES[chave] = pygame.font.SysFont("arial,helveticaneue,dejavusans", max(8, int(tamanho)), bold=titulo)
+    return _FONTES[chave]
+
+
 # --- Texto ------------------------------------------------------------------------------
 def texto(tela, fonte, conteudo, cor, pos, ancora="topleft", sombra=False):
     img = fonte.render(str(conteudo), True, cor)
@@ -108,12 +125,13 @@ def painel(tela, rect, borda=LINHA, fundo=PAINEL, raio=14, largura_borda=2, alfa
     tela.blit(s, rect.topleft)
 
 
-def brilho(tela, rect, cor, intensidade=70, raio=14, camadas=4):
-    """Aura neon ao redor de um retângulo."""
+def brilho(tela, rect, cor, intensidade=70, raio=14, camadas=4, passo=7, espessura=3):
+    """Aura neon ao redor de um retângulo. `passo` e `espessura` permitem usar em telas de baixa resolução."""
     for k in range(camadas, 0, -1):
-        r = rect.inflate(k * 7, k * 7)
+        r = rect.inflate(k * passo, k * passo)
         s = pygame.Surface(r.size, pygame.SRCALPHA)
-        pygame.draw.rect(s, (*cor, max(6, int(intensidade / k))), s.get_rect(), width=3, border_radius=raio + k * 3)
+        pygame.draw.rect(s, (*cor, max(6, int(intensidade / k))), s.get_rect(), width=espessura,
+                         border_radius=raio + k * max(1, passo // 2))
         tela.blit(s, r.topleft)
 
 
@@ -159,6 +177,56 @@ def botao_menu(tela, rect, rotulo, cor, selecionado, fonte, nome_icone, t):
         triangulo(tela, (rect.right - 36 - vai_e_vem, rect.centery), 8, cor, "esquerda")
 
 
+def fundo_item(tela, rect, cor, selecionado, t, raio=14, seta=True, passo=7, espessura=2):
+    """Forma de um item de menu (sem texto): apagado quando solto, aceso e com seta quando selecionado."""
+    fundo = misturar(PAINEL, cor, 0.22 if selecionado else 0.07)
+    if selecionado:
+        brilho(tela, rect, cor, intensidade=90 + int(30 * math.sin(t * 5)), raio=raio, passo=passo,
+               espessura=espessura + 1)
+    painel(tela, rect, borda=cor if selecionado else misturar(LINHA, cor, 0.25), fundo=fundo, raio=raio,
+           largura_borda=espessura + 1 if selecionado else espessura)
+    if selecionado and seta:
+        vai_e_vem = int(math.sin(t * 7) * rect.h * 0.06)
+        triangulo(tela, (rect.right - int(rect.h * 0.55) - vai_e_vem, rect.centery), max(3, int(rect.h * 0.13)), cor, "esquerda")
+    return fundo
+
+
+def lista_menu(tela, itens, indice, cor, fonte_item, centro_x, y0, largura, altura, folga, t, cores=None,
+               alinhar="centro", raio=14):
+    """Lista vertical de botões. Devolve os retângulos, para quem quiser desenhar algo por cima."""
+    rects = []
+    for i, rotulo in enumerate(itens):
+        x = centro_x - largura // 2 if alinhar == "centro" else centro_x
+        rect = pygame.Rect(x, y0 + i * (altura + folga), largura, altura)
+        sel = i == indice
+        c = cores[i] if cores else cor
+        fundo_item(tela, rect, c, sel, t, raio=raio)
+        cor_texto = TEXTO if sel else misturar(TEXTO3, c, 0.35)
+        if alinhar == "centro":
+            texto(tela, fonte_item, rotulo, cor_texto, rect.center, "center")
+        else:
+            texto(tela, fonte_item, rotulo, cor_texto, (rect.x + 26, rect.centery), "midleft")
+        rects.append(rect)
+    return rects
+
+
+def modal(tela, rect, titulo, cor, fonte_titulo, linhas=(), fonte_linha=None, cor_linha=TEXTO2, escurecer=170, raio=18):
+    """Caixa central para pausa, fim de jogo etc.: escurece o fundo, desenha o painel e o título."""
+    if escurecer:
+        veu = pygame.Surface(tela.get_size(), pygame.SRCALPHA)
+        veu.fill((0, 0, 8, escurecer))
+        tela.blit(veu, (0, 0))
+    brilho(tela, rect, cor, intensidade=60, raio=raio, camadas=3)
+    painel(tela, rect, borda=cor, fundo=PAINEL, raio=raio, largura_borda=3)
+    y = rect.y + 20 + fonte_titulo.get_height() // 2
+    texto(tela, fonte_titulo, titulo, cor, (rect.centerx, y), "center", sombra=True)
+    y += fonte_titulo.get_height() // 2 + 16
+    for linha in linhas:
+        r = texto(tela, fonte_linha or fonte_titulo, linha, cor_linha, (rect.centerx, y), "midtop")
+        y = r.bottom + 6
+    return y
+
+
 # --- Atalhos de teclado -----------------------------------------------------------------
 def _chip(tela, f_tecla, f_texto, tecla, legenda, x, y):
     img_tecla = f_tecla.render(tecla, True, TEXTO)
@@ -180,9 +248,13 @@ def medir_atalhos(f_tecla, f_texto, itens):
     return total - 30
 
 
-def rodape_atalhos(tela, f_tecla, f_texto, itens, y, largura):
-    """Faixa de atalhos centralizada, no estilo de teclas ("[ENTER] Jogar")."""
-    x = (largura - medir_atalhos(f_tecla, f_texto, itens)) // 2
+def rodape_atalhos(tela, f_tecla, f_texto, itens, y, largura, fundo=False):
+    """Faixa de atalhos centralizada, no estilo de teclas ("[ENTER] Jogar").
+    Com fundo=True desenha uma barra escura atrás, para ler bem sobre cenários claros."""
+    total = medir_atalhos(f_tecla, f_texto, itens)
+    x = (largura - total) // 2
+    if fundo:
+        painel(tela, pygame.Rect(x - 18, y - 8, total + 36, 46), borda=LINHA, fundo=PAINEL, raio=12, alfa=225)
     for tecla, legenda in itens:
         x = _chip(tela, f_tecla, f_texto, tecla, legenda, x, y)
 
