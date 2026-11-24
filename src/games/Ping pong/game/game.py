@@ -213,7 +213,7 @@ class Game:
         pygame.draw.rect(self.screen, (32, 46, 66), self.screen.get_rect(), 4)
 
     def _draw_menu(self):
-        draw_text(self.screen, 'PING PONG', 76, FOREGROUND_COLOR, (SCREEN_WIDTH // 2, 125), True)
+        draw_text(self.screen, 'PONG', 76, FOREGROUND_COLOR, (SCREEN_WIDTH // 2, 125), True)
         draw_text(self.screen, 'ARCADE', 26, ACCENT_COLOR, (SCREEN_WIDTH // 2, 182), True)
         items = ('1  JOGADOR VS CPU', '2  JOGADORES', 'CONTROLES', 'SAIR')
         for i, item in enumerate(items):

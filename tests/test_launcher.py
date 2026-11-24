@@ -30,6 +30,12 @@ class TestLauncher(unittest.TestCase):
     def test_nome_bonito(self):
         self.assertEqual(self.main.nome_bonito("game6"), "Game 6")
         self.assertEqual(self.main.nome_bonito("snake"), "Snake")
+        self.assertEqual(self.main.nome_bonito("Ping pong"), "Pong")
+        self.assertEqual(self.main.nome_bonito("Flappy bird"), "Flappy Bird")
+
+    def test_titulos_dos_jogos_na_lista(self):
+        titulos = sorted(j["titulo"] for j in self.main.listar_jogos())
+        self.assertEqual(titulos, ["Flappy Bird", "Frogger", "Kombate", "Pong", "Snake", "Space Invaders"])
 
     def test_config_padrao_quando_arquivo_nao_existe(self):
         antigo = self.main.CONFIG_PATH

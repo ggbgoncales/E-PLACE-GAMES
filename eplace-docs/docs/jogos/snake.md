@@ -1,14 +1,14 @@
 ---
 id: snake
 title: Snake
-description: Regras, controles e conceitos de programação do Snake (Cobra Neon).
+description: Regras, controles e conceitos de programação do Snake.
 ---
 
 <div className="eyebrow">MINI-GAME / GAME_01</div>
 
 # 🐍 Snake
 
-<p className="lead">Cresça, marque pontos e não deixe a cobra se enroscar. Versão neon com combos, comida especial e três dificuldades. Dentro do jogo o título aparece como **Cobra Neon**.</p>
+<p className="lead">Cresça, marque pontos e não deixe a cobra se enroscar. Versão neon com combos, comida especial e três dificuldades.</p>
 
 ![Snake em partida, com painel de pontos, recorde e modo](/img/jogos/snake.jpg)
 

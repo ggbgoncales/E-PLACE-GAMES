@@ -117,7 +117,7 @@ class Game:
         self.ox, self.oy = (ww - self.out_w) // 2, (wh - self.out_h) // 2
         self.textos = []
         self._fontes = {}
-        pygame.display.set_caption("Sapo Aventureiro Pixel")
+        pygame.display.set_caption("Frogger")
         self.canvas = pygame.Surface((VW, VH))
         self.clock = pygame.time.Clock()
         self.FONT = 8
@@ -544,7 +544,7 @@ class Game:
             # e rodape reservado para navegacao/atalhos, sem cobrir os botoes.
             hero = pygame.transform.scale(self.frog.build_sprite(), (84, 74))
             self.canvas.blit(hero, (VW // 2 - 42, 14))
-            self.text_center("SAPO AVENTUREIRO", 24, 92, FROG_BELLY)
+            self.text_center("FROGGER", 24, 92, FROG_BELLY)
             self.text_center("TRAVESSIA PIXEL - FASES INFINITAS", 10, 127, FROG_LIGHT)
             self.text_center("Troncos e tartarugas sao seguros. Jacares, cobras e agua nao.", 8.5, 151, WHITE)
             self.text_center("Chegue na vitoria-regia no topo para passar de fase. Mosca vale +200.", 8.0, 165, WHITE)

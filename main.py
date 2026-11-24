@@ -1,5 +1,5 @@
 """
-Eplace - Launcher de Jogos (minimalista)
+E-Place - Launcher de Jogos (minimalista)
 ========================================
 Tela inicial: imagem de fundo (assets/ui/background.png) + menu central
 (Jogar / Configuracoes / Sair) com animacao subindo/descendo.
@@ -120,7 +120,13 @@ def listar_jogos():
     return jogos
 
 
+# Nomes exibidos no launcher quando diferem do nome da pasta do jogo.
+NOMES_DOS_JOGOS = {"Ping pong": "Pong", "Flappy bird": "Flappy Bird"}
+
+
 def nome_bonito(nome):
+    if nome in NOMES_DOS_JOGOS:
+        return NOMES_DOS_JOGOS[nome]
     if nome.lower().startswith("game") and nome[4:].isdigit():
         return "Game " + nome[4:]
     return nome[:1].upper() + nome[1:]
@@ -136,7 +142,7 @@ class Eplace:
         self.capas_cache = {}  # Adicione esta linha aqui
         pygame.init()
         self.controle = XboxController()
-        pygame.display.set_caption("Eplace - Launcher")
+        pygame.display.set_caption("E-Place - Launcher")
         self.cfg = carregar_config()
         self.som_botao = None
         self._iniciar_musica_menu()

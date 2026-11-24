@@ -14,7 +14,7 @@ import pygame
 from gamepad import XboxController, draw_controller_text, draw_controls_table
 
 # ============================================================
-# Cobra Neon - jogo completo em um unico arquivo
+# Snake - jogo completo em um unico arquivo
 # Controles: setas/WASD, P/ESC pausa, M som, F11 tela cheia
 # Requer: pip install pygame
 # ============================================================
@@ -42,7 +42,7 @@ RED = (255, 77, 91)
 
 pygame.init()
 controller = XboxController()
-pygame.display.set_caption("Cobra Neon")
+pygame.display.set_caption("Snake")
 
 
 def clamp(value, low, high):
@@ -504,7 +504,7 @@ class SnakeGame:
 
     def draw_hud(self):
         x = PLAY_W + 28
-        title = self.font_md.render("COBRA NEON", True, GREEN)
+        title = self.font_md.render("SNAKE", True, GREEN)
         self.canvas.blit(title, (x, 30))
         self.canvas.blit(self.font_sm.render("ARCADE PROFISSIONAL", True, MUTED), (x, 64))
 
@@ -552,10 +552,8 @@ class SnakeGame:
             x = (i * 113 + int(pygame.time.get_ticks() * 0.02)) % (WIDTH + 100) - 50
             y = 100 + (i * 67) % 520
             self.glow_circle(self.canvas, (x, y), 2 + (i % 3), CYAN if i % 2 else GREEN, 2)
-        logo = self.font_xl.render("COBRA", True, WHITE)
-        neon = self.font_xl.render("NEON", True, GREEN)
-        self.canvas.blit(logo, logo.get_rect(center=(WIDTH // 2 - 88, 138)))
-        self.canvas.blit(neon, neon.get_rect(center=(WIDTH // 2 + 128, 138)))
+        logo = self.font_xl.render("SNAKE", True, GREEN)
+        self.canvas.blit(logo, logo.get_rect(center=(WIDTH // 2, 138)))
         subtitle = self.font_md.render("Sobreviva. Cresca. Supere o recorde.", True, MUTED)
         self.canvas.blit(subtitle, subtitle.get_rect(center=(WIDTH // 2, 210)))
 

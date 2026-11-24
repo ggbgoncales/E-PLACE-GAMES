@@ -1,7 +1,7 @@
 """Configuracoes centrais do jogo."""
 WIDTH, HEIGHT = 480, 720
 FPS = 60
-TITLE = "Flappy Bird: Skyward"
+TITLE = "Flappy Bird"
 GRAVITY = 1540
 FLAP_FORCE = -475
 PIPE_SPEED = 205

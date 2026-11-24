@@ -2,7 +2,7 @@ import os
 os.environ["SDL_VIDEO_WINDOW_POS"] = "0,0"
 os.environ["SDL_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR"] = "0"
 """
-NEON VOID - arcade espacial em um unico arquivo.
+SPACE INVADERS - arcade espacial em um unico arquivo.
 Requisito: pip install pygame
 Execucao: python main.py
 
@@ -49,7 +49,7 @@ def salvar_recorde(valor):
 # ----------------------------- CONFIGURACAO -----------------------------
 WIDTH, HEIGHT = 960, 540
 FPS = 60
-TITLE = "NEON VOID"
+TITLE = "SPACE INVADERS"
 Vec = pygame.Vector2
 
 BLACK = (2, 5, 15)
@@ -567,8 +567,8 @@ class Game:
         glow_circle(screen,BLUE,(760,155),72,4)
         pygame.draw.circle(screen,(25,67,125),(760,155),64)
         pygame.draw.arc(screen,(80,170,255),(695,120,130,55),0,math.pi,8)
-        text(screen,"NEON",FONT_BIG,WHITE,(66,75))
-        text(screen,"VOID",FONT_BIG,CYAN,(66,137))
+        text(screen,"SPACE",FONT_BIG,WHITE,(66,75))
+        text(screen,"INVADERS",FONT_BIG,CYAN,(66,137))
         text(screen,"COMANDO ESTELAR",FONT_SMALL,(145,190,230),(71,213))
         items=("INICIAR MISSAO","COMO JOGAR","CONTROLES","SAIR")
         for i,item in enumerate(items):
