@@ -18,7 +18,7 @@ description: Como preparar o ambiente Python e executar o launcher do E-Place.
 
 ## 1. Crie um ambiente virtual e instale as dependências
 
-A única dependência é o **Pygame** (`pygame>=2.5.0`, listado em `requirements.txt`).
+A única dependência é o **Pygame CE** (`pygame-ce>=2.5.0`, listado em `requirements.txt`). O Pygame CE é um fork compatível do Pygame, com pacotes prontos para as versões recentes do Python (como a 3.14), e é usado com o mesmo `import pygame`.
 
 ```bash
 python3 -m venv .venv
@@ -103,5 +103,6 @@ python main.py
 ## Se algo der errado
 
 - **`ModuleNotFoundError: pygame`**: confira se o ambiente virtual está ativo e rode `pip install -r requirements.txt`.
+- **Erro ao compilar o `pygame` (`SDL.h` not found)**: o pacote `pygame` não tem versão pronta para o seu Python. Desinstale-o e use o `pygame-ce` (`pip install -r requirements.txt`).
 - **Arquivo não encontrado**: verifique se o terminal está na pasta que contém o `main.py`.
 - **A janela fecha rápido**: execute pelo terminal para ver a mensagem de erro.
