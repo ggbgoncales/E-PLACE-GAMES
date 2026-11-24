@@ -179,6 +179,13 @@ class App:
         cor = ui.TEXTO if sel else ui.misturar(ui.TEXTO3, ui.VERMELHO, 0.35)
         ui.texto(self.tela, ui.fonte(16, True), rotulo, cor, centro, "center")
 
+    def _linha_dificuldade(self, y, sel, largura=520):
+        """Botao de dificuldade, igual ao dos outros jogos (ui.seletor_dificuldade)."""
+        r = pygame.Rect(0, 0, largura, 54)
+        r.center = (LARGURA // 2, y)
+        ui.seletor_dificuldade(self.tela, r, "CPU", NIVEIS_CPU[self.nivel]["nome"], self.nivel - 1, 5,
+                               ui.VERMELHO, sel, self.t / 60.0)
+
     # ================================================================ demo (fundo do menu)
     def _atualizar_demo(self):
         if self.demo is None or self.demo.fase == "fim":
@@ -241,16 +248,7 @@ class App:
             y = 325 + i * 64
             if i == 2:                                        # medidor de dificuldade
                 sel = i == self.menu_idx
-                self._botao("", (LARGURA // 2, y), sel)
-                texto(self.tela, "CPU", self.fontes["media"], (255, 255, 255) if sel else (205, 190, 195),
-                      (LARGURA // 2 - 200, y), "midleft")
-                render.medidor_dificuldade(self.tela, (LARGURA // 2 - 10, y - 18), self.nivel, self.fontes,
-                                           0.5, nome=False)
-                texto(self.tela, NIVEIS_CPU[self.nivel]["nome"], self.fontes["pequena"],
-                      render.CORES_NIVEL[self.nivel], (LARGURA // 2 + 130, y), "midleft")
-                if sel:
-                    texto(self.tela, "<", self.fontes["media"], (255, 255, 255), (LARGURA // 2 - 90, y))
-                    texto(self.tela, ">", self.fontes["media"], (255, 255, 255), (LARGURA // 2 + 72, y))
+                self._linha_dificuldade(y, sel, 520)
             else:
                 self._botao(item, (LARGURA // 2, y), i == self.menu_idx)
         ui.rodape_atalhos(self.tela, ui.fonte(10, True), ui.fonte(22, False),
@@ -751,11 +749,6 @@ class App:
             y = 300 + i * 64
             sel = i == self.pausa_idx
             if item == "DIFICULDADE":
-                self._botao("", (LARGURA // 2, y), sel, 520)
-                render.medidor_dificuldade(self.tela, (LARGURA // 2 - 60, y - 18), self.nivel, self.fontes,
-                                           0.5, nome=False)
-                texto(self.tela, NIVEIS_CPU[self.nivel]["nome"], self.fontes["pequena"],
-                      render.CORES_NIVEL[self.nivel], (LARGURA // 2 + 70, y), "midleft")
-                texto(self.tela, "CPU", self.fontes["media"], (255, 255, 255), (LARGURA // 2 - 230, y), "midleft")
+                self._linha_dificuldade(y, sel, 520)
             else:
                 self._botao(item, (LARGURA // 2, y), sel, 440)

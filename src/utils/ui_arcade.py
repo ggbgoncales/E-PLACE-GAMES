@@ -267,3 +267,45 @@ def etiqueta(tela, fonte, conteudo, cor, x, y):
     pygame.draw.rect(tela, misturar(PAINEL, cor, 0.7), rect, width=2, border_radius=15)
     tela.blit(img, img.get_rect(center=rect.center))
     return rect.right + 10
+
+
+# Cores do medidor de dificuldade, do mais facil (verde) ao mais dificil (vermelho).
+_ESCALA_NIVEL = [(70, 210, 110), (170, 220, 70), (250, 200, 50), (250, 120, 45), (220, 50, 70)]
+
+
+def cor_nivel(indice, total):
+    """Cor do nivel `indice` (0 a total-1) na escala verde -> vermelho, qualquer que seja o total de niveis."""
+    pos = 0 if total <= 1 else indice / (total - 1) * (len(_ESCALA_NIVEL) - 1)
+    a = int(pos)
+    b = min(a + 1, len(_ESCALA_NIVEL) - 1)
+    return misturar(_ESCALA_NIVEL[a], _ESCALA_NIVEL[b], pos - a)
+
+
+def seletor_dificuldade(tela, rect, rotulo, nome, indice, total, cor, selecionado, t):
+    """Botao de dificuldade igual em todos os jogos: rotulo a esquerda e, a direita, < barras NOME >.
+    `indice` vai de 0 a total-1; o jogo escolhe os seus proprios niveis e nomes."""
+    fundo_item(tela, rect, cor, selecionado, t, raio=14)
+    cy = rect.centery
+    cor_nome = cor_nivel(indice, total)
+    texto(tela, fonte(12, True), rotulo, TEXTO if selecionado else misturar(TEXTO3, cor, 0.35),
+          (rect.x + 24, cy), "midleft")
+
+    f_nome = fonte(11, True)
+    larg_nome = f_nome.size(nome)[0]
+    larg_barra, gap = 12, 4
+    larg_barras = total * larg_barra + (total - 1) * gap
+    seta = TEXTO if selecionado else TEXTO3
+    x = rect.right - 24
+    texto(tela, fonte(12, True), ">", seta, (x, cy), "midright")
+    x -= 24
+    texto(tela, f_nome, nome, cor_nome, (x, cy), "midright")
+    x -= larg_nome + 14 - 0
+    x0 = x - larg_barras
+    for i in range(total):
+        h = 8 + int(i * 16 / max(1, total - 1))
+        r = pygame.Rect(x0 + i * (larg_barra + gap), cy + 12 - h, larg_barra, h)
+        if i <= indice:
+            pygame.draw.rect(tela, cor_nivel(i, total), r, border_radius=3)
+        else:
+            pygame.draw.rect(tela, (48, 40, 62), r, border_radius=3)
+    texto(tela, fonte(12, True), "<", seta, (x0 - 14, cy), "midright")

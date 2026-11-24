@@ -140,6 +140,8 @@ class Button:
         self.action = action
         self.accent = accent
         self.hover = 0.0
+        self.legenda = None  # se definido, o botao vira o seletor de dificuldade
+        self.indice, self.total = 0, 1
 
     def update(self, mouse, dt, selected=False):
         target = 1.0 if (selected or self.rect.collidepoint(mouse)) else 0.0
@@ -148,6 +150,10 @@ class Button:
     def draw(self, surface, font):
         t = pygame.time.get_ticks() / 1000
         selecionado = self.hover > 0.5
+        if self.legenda:
+            ui.seletor_dificuldade(surface, self.rect, self.legenda, self.text, self.indice, self.total,
+                                   self.accent, selecionado, t)
+            return
         ui.fundo_item(surface, self.rect, self.accent, selecionado, t, raio=14)
         cor = ui.TEXTO if selecionado else ui.misturar(ui.TEXTO3, self.accent, 0.35)
         ui.texto(surface, font, self.text, cor, self.rect.center, "center")
@@ -562,7 +568,9 @@ class SnakeGame:
         self.snake, self.direction = old_snake, old_dir
 
         diff, _, color = self.difficulties[self.difficulty]
-        self.buttons[1].text = f"DIFICULDADE: {diff}"
+        self.buttons[1].text = diff
+        self.buttons[1].legenda = "DIFICULDADE"
+        self.buttons[1].indice, self.buttons[1].total = self.difficulty, len(self.difficulties)
         for button in self.buttons:
             button.draw(self.canvas, self.font_btn)
         # Rodape de navegacao do menu: controles sempre visiveis junto do atalho.

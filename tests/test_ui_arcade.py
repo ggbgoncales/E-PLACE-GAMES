@@ -19,6 +19,15 @@ class TestUiArcade(unittest.TestCase):
         self.assertEqual(self.ui.misturar((0, 0, 0), (100, 200, 50), 1), (100, 200, 50))
         self.assertEqual(self.ui.misturar((0, 0, 0), (100, 200, 50), 0.5), (50, 100, 25))
 
+    def test_seletor_de_dificuldade_aceita_qualquer_numero_de_niveis(self):
+        tela = pygame.Surface((600, 120))
+        for total in (3, 5):
+            self.assertEqual(self.ui.cor_nivel(0, total), self.ui._ESCALA_NIVEL[0])
+            self.assertEqual(self.ui.cor_nivel(total - 1, total), self.ui._ESCALA_NIVEL[-1])
+            for i in range(total):
+                self.ui.seletor_dificuldade(tela, pygame.Rect(40, 30, 500, 54), "CPU", "NIVEL", i, total,
+                                            self.ui.VERMELHO, bool(i % 2), 0)
+
     def test_quebrar_texto_respeita_a_largura(self):
         fonte = self.ui.fonte(20)
         linhas = self.ui.quebrar_texto(fonte, "um texto bem comprido que precisa ser dividido em varias linhas", 150)
