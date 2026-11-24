@@ -1,0 +1,158 @@
+%% Diagrama de classes dos seis jogos: classe principal de cada um e o que compartilham.
+classDiagram
+    direction TB
+
+    class Eplace {
+        <<launcher>>
+        +iniciar_jogo()
+    }
+    class XboxController {
+        <<src/gamepad.py>>
+        +poll_keys()
+        +button(index)
+        +axis(index)
+    }
+    class ui_arcade {
+        <<src/utils/ui_arcade.py>>
+        +lista_menu()
+        +modal()
+        +rodape_atalhos()
+    }
+
+    class SnakeGame {
+        -snake: list
+        -state: str
+        -record: int
+        +reset()
+        +move_snake()
+        +handle_event(event)
+        +update(dt)
+        +draw()
+        +run()
+    }
+    class Button {
+        +text: str
+        +action: str
+        +draw(surface, font)
+    }
+
+    class PongGame {
+        -mode: str
+        -state: str
+        -left_score: int
+        -right_score: int
+        -vitorias: int
+        +start_match(mode)
+        +handle_event(event)
+        +update(dt)
+        +draw()
+    }
+    class Paddle {
+        +rect: Rect
+        +move(direction, dt)
+    }
+    class Ball {
+        +velocity
+        +update(dt)
+        +bounce_from_paddle(paddle, direction)
+    }
+
+    class FroggerGame {
+        -state: str
+        -recorde: int
+        +iniciar_fase(n)
+        +check_frog()
+        +update(dt)
+        +draw()
+        +run()
+    }
+    class Frog {
+        +lives: int
+        +score: int
+        +level: int
+        +request_jump(dx, dy)
+    }
+    class Mover {
+        +kind: str
+        +speed: float
+        +safe()
+        +update(dt)
+    }
+
+    class SpaceGame {
+        -state: str
+        -highscore: int
+        +reset()
+        +new_wave()
+        +update_play(dt)
+        +draw_play()
+        +run()
+    }
+    class Player {
+        +hp: float
+        +energy: float
+        +shield: float
+        +shoot(bullets)
+        +hit(damage)
+    }
+    class Enemy
+    class Asteroid
+    class Powerup
+    class Bullet
+
+    class FlappyGame {
+        -state: str
+        -shop_tab: int
+        +flap()
+        +update_play(dt)
+        +draw_shop()
+        +buy_or_equip()
+        +run()
+    }
+    class Bird {
+        +hat: str
+        +effect: str
+        +skin: str
+        +flap()
+    }
+    class Pipe {
+        +gap_y: float
+        +update(dt, speed)
+    }
+    class SaveData {
+        +data: dict
+        +save()
+    }
+
+    class KombateApp {
+        -cena: str
+        -vs_cpu: bool
+        -nivel: int
+        +cena_menu(eventos)
+        +iniciar_luta(c1, c2)
+        +cena_luta(eventos)
+        +run()
+    }
+
+    Eplace --> SnakeGame : executa (processo próprio)
+    Eplace --> PongGame : executa
+    Eplace --> FroggerGame : executa
+    Eplace --> SpaceGame : executa
+    Eplace --> FlappyGame : executa
+    Eplace --> KombateApp : executa
+
+    SnakeGame *-- Button
+    PongGame *-- Paddle
+    PongGame *-- Ball
+    FroggerGame *-- Frog
+    FroggerGame *-- Mover
+    SpaceGame *-- Player
+    SpaceGame *-- Enemy
+    SpaceGame *-- Asteroid
+    SpaceGame *-- Powerup
+    SpaceGame *-- Bullet
+    FlappyGame *-- Bird
+    FlappyGame *-- Pipe
+    FlappyGame *-- SaveData
+
+    note for XboxController "Todos os jogos usam o gamepad.py (controles) e o ui_arcade.py (menus e caixas), de src/"

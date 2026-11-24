@@ -1,0 +1,94 @@
+%% Diagrama de classes do launcher (main.py e módulos compartilhados).
+%% Para editar: abra este arquivo no VS Code com a extensão Mermaid e exporte para PNG.
+classDiagram
+    direction TB
+
+    class Eplace {
+        -cfg: dict
+        -tela: Surface
+        -clock: Clock
+        -cena: str
+        -rodando: bool
+        -menu_idx: int
+        -config_idx: int
+        -jogo_idx: int
+        -jogos: list~Jogo~
+        -recordes: list
+        -logo_img: Surface
+        +run()
+        +eventos()
+        +desenhar()
+        +iniciar_jogo()
+        -_ev_home(e)
+        -_ev_jogos(e)
+        -_ev_recordes(e)
+        -_ev_config(e)
+        -_draw_home()
+        -_draw_transicao()
+        -_draw_jogos()
+        -_draw_recordes()
+        -_draw_config()
+        -_carregar_recordes()
+        -_aplicar_tela()
+        -_apresentar()
+    }
+
+    class Config {
+        +tela_cheia: bool
+        +volume: int
+        +som_menu: bool
+        +titulo: str
+    }
+
+    class Jogo {
+        +id: str
+        +titulo: str
+        +caminho: str
+        +main: str
+        +capa: str
+    }
+
+    class XboxController {
+        -device_name: str
+        -layout: str
+        +connected: bool
+        +refresh()
+        +poll_keys()
+        +button(index)
+        +axis(index)
+        +button_icon(index)
+    }
+
+    class FundoArcade {
+        +desenhar(tela, t)
+    }
+
+    class ui_arcade {
+        <<módulo>>
+        +painel()
+        +brilho()
+        +botao_menu()
+        +lista_menu()
+        +modal()
+        +rodape_atalhos()
+        +fonte()
+    }
+
+    class GestorJogador {
+        +obter_pontuacao(jogo_id)
+        +registar_pontuacao(jogo_id, pontuacao)
+    }
+
+    class ZipExtractor {
+        <<módulo>>
+        +extrair_zips(games_dir)
+    }
+
+    Eplace --> Config : carrega/salva (config.json)
+    Eplace --> Jogo : lista e executa
+    Eplace --> XboxController : lê o controle
+    Eplace --> FundoArcade : desenha o fundo
+    Eplace ..> ui_arcade : usa os componentes
+    ui_arcade o-- FundoArcade
+    Eplace --> GestorJogador : pontuações
+    Eplace --> ZipExtractor : extrai jogos (imports/)
