@@ -135,6 +135,9 @@ python -m unittest discover -s tests -t .
 
 Eles cobrem a descoberta de jogos do launcher, a leitura dos recordes, o recorde de vitórias do Pong e do Kombate, as regras de rounds e K.O. do Kombate e o módulo `score.py`. A cada push e pull request, o GitHub Actions roda esses testes (`.github/workflows/tests.yml`).
 
+## Diagramas UML
+Os diagramas de classes ficam em `assets/uml/` (código-fonte `.mmd` em Mermaid e imagem `.png`). Para atualizar, edite o `.mmd` no VS Code com uma extensão Mermaid e exporte de novo. `assets/DiagramaUML.png` é o diagrama do launcher.
+
 ## Documentação
 
 O site de documentação, feito com [Docusaurus](https://docusaurus.io/), fica em `eplace-docs/` e traz a instalação, a estrutura do projeto e uma página por jogo, com controles, regras e capturas de tela.

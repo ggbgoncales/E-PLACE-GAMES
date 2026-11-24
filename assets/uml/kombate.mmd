@@ -1,0 +1,73 @@
+%% Diagrama de classes do Kombate: telas, regras da luta, IA e dados dos personagens.
+classDiagram
+    direction TB
+
+    class KombateApp {
+        -cena: str
+        -vs_cpu: bool
+        -nivel: int
+        -mapa_idx: int
+        +cena_menu(eventos)
+        +cena_selecao(eventos)
+        +cena_mapa(eventos)
+        +iniciar_luta(c1, c2)
+        +cena_luta(eventos)
+        +cena_pausa(eventos)
+        +run()
+    }
+    class Partida {
+        +round: int
+        +vencedor
+        +segundos: int
+        +novo_round()
+        +update(cmd1, cmd2)
+    }
+    class Fighter {
+        +char: Character
+        +slot: int
+        +vitorias: int
+        +hp: float
+        +update(cmd, oponente, combate)
+        +iniciar_golpe()
+        +hurtbox()
+    }
+    class Character {
+        +nome: str
+        +arquetipo: str
+        +max_hp: int
+        +golpes: dict
+    }
+    class CombatManager {
+        +spawn()
+        +update(f1, f2)
+        +separar(f1, f2)
+    }
+    class CPU {
+        +set_nivel(nivel)
+        +update(oponente, combate)
+    }
+    class Teclado {
+        +ler(eventos, teclas)
+        +tecla(acao)
+    }
+    class Comandos {
+        +esquerda
+        +direita
+        +apertou: set
+        +frente(facing)
+        +tras(facing)
+    }
+    class Mapa {
+        +desenhar(tela, t)
+    }
+
+    KombateApp --> Partida : cria a cada luta
+    KombateApp --> Mapa : escolhe a arena (4 mapas)
+    KombateApp --> Teclado : lê jogadores 1 e 2
+    Partida *-- Fighter : f1 e f2
+    Partida *-- CombatManager
+    Partida o-- CPU : 0 a 2
+    Fighter --> Character : usa os dados
+    CPU --> Comandos : gera os mesmos comandos
+    Teclado --> Comandos : gera
+    Fighter ..> Comandos : recebe

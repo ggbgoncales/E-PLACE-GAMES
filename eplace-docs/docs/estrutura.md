@@ -98,6 +98,22 @@ python -m unittest discover -s tests -t .
 
 Eles cobrem a descoberta de jogos do launcher, a leitura dos recordes, o recorde de vitórias do Pong e do Kombate, as regras de rounds e K.O. do Kombate e o módulo `score.py`. A cada push e pull request, o GitHub Actions roda esses testes.
 
+## Diagramas UML
+
+Os diagramas de classes são escritos em Mermaid (`assets/uml/*.mmd`) e exportados para PNG. Para atualizar, abra o `.mmd` no VS Code com uma extensão Mermaid e exporte de novo.
+
+**Launcher:** a classe `Eplace` e o que ela usa (configuração, jogos, controle, fundo, pontuações).
+
+![Diagrama de classes do launcher](/img/uml/launcher.png)
+
+**Jogos:** a classe principal de cada jogo e as classes que cada um agrupa.
+
+![Diagrama de classes dos seis jogos](/img/uml/jogos.png)
+
+**Kombate:** telas, regras da luta, IA e dados dos personagens.
+
+![Diagrama de classes do Kombate](/img/uml/kombate.png)
+
 ## Boas práticas adotadas
 
 - Cada mini-game tem a lógica em módulos próprios.
