@@ -121,7 +121,7 @@ class Game:
         pygame.display.set_caption("Frogger")
         self.canvas = pygame.Surface((VW, VH))
         self.clock = pygame.time.Clock()
-        self.FONT = 8
+        self.FONT = 10
         self.SMALL = 6.5
         self.BIG = 18
         self.recorde = carregar_recorde()
@@ -520,6 +520,79 @@ class Game:
             r.update(dt)
         self.ripples = [r for r in self.ripples if r.age <= r.life]
 
+    # ------------------------------------------------------------------
+    # MENUS E MENSAGENS (na resolução da janela, com os componentes do launcher)
+    # ------------------------------------------------------------------
+    def _ui_estado(self):
+        area = pygame.Rect(self.ox, self.oy, self.out_w, self.out_h)
+        h, w = area.h, area.w
+        t = pygame.time.get_ticks() / 1000
+
+        def f8(v):                      # Press Start 2P fica nítida em múltiplos de 8
+            return ui.fonte(max(8, int(round(v / 8.0)) * 8), True)
+
+        def vt(v):
+            return ui.fonte(max(14, int(v)), False)
+
+        tecla = ui.fonte(max(10, int(0.016 * h)), True)
+        legenda = vt(0.034 * h)
+        centro = area.centerx
+
+        if self.state == "title":
+            painel = pygame.Rect(0, 0, int(0.78 * w), int(0.705 * h))
+            painel.midtop = (centro, area.y + int(0.26 * h))
+            ui.painel(self.window, painel, borda=ui.LINHA, fundo=ui.PAINEL, raio=int(0.03 * h), alfa=238)
+            ui.texto(self.window, f8(0.0625 * h), "FROGGER", ui.VERDE, (centro, area.y + int(0.335 * h)), "center", sombra=True)
+            ui.texto(self.window, vt(0.045 * h), "TRAVESSIA PIXEL - FASES INFINITAS", ui.AMARELO, (centro, area.y + int(0.395 * h)), "center")
+            ui.texto(self.window, vt(0.036 * h), "Troncos e tartarugas sao seguros. Jacares, cobras e agua nao.", ui.TEXTO,
+                     (centro, area.y + int(0.455 * h)), "center")
+            ui.texto(self.window, vt(0.036 * h), "Chegue na vitoria-regia no topo para passar de fase. Mosca vale +200.", ui.TEXTO,
+                     (centro, area.y + int(0.505 * h)), "center")
+            ui.texto(self.window, f8(0.03 * h), f"RECORDE  {self.recorde}", ui.AMARELO, (centro, area.y + int(0.567 * h)), "center")
+            ui.lista_menu(self.window, ("JOGAR", "CONTROLES", "SAIR"), self.title_menu_idx, ui.VERDE, f8(0.032 * h),
+                          centro, area.y + int(0.612 * h), int(0.46 * w), int(0.078 * h), int(0.014 * h), t,
+                          cores=(ui.VERDE, ui.CIANO, ui.VERMELHO), raio=int(0.022 * h))
+            ui.rodape_atalhos(self.window, tecla, legenda,
+                              [("SETAS", "Navegar"), ("ENTER", "Confirmar"), ("F1", "Controles"), ("ESC", "Sair")],
+                              area.y + int(0.9 * h), self.window.get_width())
+            if self.controle.connected:
+                draw_controller_text(self.window, vt(0.032 * h),
+                                     f"CONFIRMAR: {self.controle.button_icon(0)}   VOLTAR: {self.controle.button_icon(1)}   CONTROLES: {self.controle.button_icon(3)}",
+                                     ui.CIANO, (centro, area.y + int(0.955 * h)), self.controle, "center")
+        elif self.state == "pause":
+            r = pygame.Rect(0, 0, int(0.5 * w), int(0.25 * h))
+            r.center = area.center
+            ui.modal(self.window, r, "PAUSADO", ui.AMARELO, f8(0.05 * h), escurecer=0)
+            ui.rodape_atalhos(self.window, tecla, legenda, [("P", "Continuar"), ("ESC", "Menu")], r.bottom - int(0.085 * h), self.window.get_width())
+        elif self.state == "gameover":
+            r = pygame.Rect(0, 0, int(0.6 * w), int(0.66 * h))
+            r.center = area.center
+            ui.modal(self.window, r, "FIM DE JOGO", ui.VERMELHO, f8(0.05 * h), escurecer=0)
+            cartoes = (("PONTUACAO", str(self.frog.score), ui.TEXTO), ("FASE", str(self.frog.level), ui.CIANO),
+                       ("RECORDE", str(self.recorde), ui.AMARELO))
+            cw = (r.w - int(0.06 * w)) // 3
+            for k, (rot, val, cor) in enumerate(cartoes):
+                cr = pygame.Rect(r.x + int(0.02 * w) + k * (cw + int(0.01 * w)), r.y + int(0.2 * h), cw, int(0.2 * h))
+                ui.painel(self.window, cr, borda=ui.LINHA, fundo=ui.PAINEL2, raio=int(0.02 * h))
+                ui.texto(self.window, vt(0.036 * h), rot, ui.TEXTO3, (cr.centerx, cr.y + int(0.05 * h)), "center")
+                ui.texto(self.window, f8(0.04 * h), val, cor, (cr.centerx, cr.y + int(0.13 * h)), "center")
+            ui.texto(self.window, vt(0.04 * h), f"Cenario: {self.cfg['nome']}", ui.TEXTO2, (centro, r.y + int(0.45 * h)), "center")
+            if self.novo_recorde:
+                ui.texto(self.window, f8(0.03 * h), "NOVO RECORDE!", ui.VERDE, (centro, r.y + int(0.5 * h)), "center")
+            ui.rodape_atalhos(self.window, tecla, legenda, [("R", "Recomecar"), ("ESC", "Sair")], r.bottom - int(0.1 * h), self.window.get_width())
+        elif self.state == "intro":
+            r = pygame.Rect(0, 0, int(0.66 * w), int(0.28 * h))
+            r.center = area.center
+            ui.modal(self.window, r, f"FASE {self.frog.level}", ui.CIANO, f8(0.05 * h), escurecer=0)
+            ui.texto(self.window, f8(0.03 * h), self.cfg["nome"], ui.VERDE, (centro, r.y + int(0.135 * h)), "center")
+            ui.texto(self.window, vt(0.04 * h), self.cfg["dica"], ui.TEXTO, (centro, r.y + int(0.205 * h)), "center")
+        elif self.state == "clear":
+            r = pygame.Rect(0, 0, int(0.66 * w), int(0.24 * h))
+            r.center = area.center
+            ui.modal(self.window, r, "FASE COMPLETA!", ui.VERDE, f8(0.045 * h), escurecer=0)
+            ui.texto(self.window, vt(0.045 * h), f"Bonus +{self.ultimo_bonus}  -  Proxima: fase {self.frog.level + 1}", ui.TEXTO,
+                     (centro, r.y + int(0.165 * h)), "center")
+
     def draw(self):
         self.draw_map()
         for mover in self.movers:
@@ -535,82 +608,16 @@ class Game:
         self.draw_noite()
         self.draw_ui()
 
-        cy = VH // 2
+        # Menus e mensagens são desenhados depois, na resolução da janela (_ui_estado),
+        # para o texto ficar nítido e legível. Aqui só escurecemos o cenário.
         if self.state == "title":
-            self.draw_overlay((6, 20, 24, 205))
-
-            # Menu ampliado, seguindo a hierarquia visual do Space Invaders:
-            # mascote e titulo em destaque, opcoes maiores com selecao evidente
-            # e rodape reservado para navegacao/atalhos, sem cobrir os botoes.
+            self.draw_overlay((6, 20, 24, 225))
             hero = pygame.transform.scale(self.frog.build_sprite(), (84, 74))
             self.canvas.blit(hero, (VW // 2 - 42, 14))
-            self.text_center("FROGGER", 24, 92, FROG_BELLY)
-            self.text_center("TRAVESSIA PIXEL - FASES INFINITAS", 10, 127, FROG_LIGHT)
-            self.text_center("Troncos e tartarugas sao seguros. Jacares, cobras e agua nao.", 8.5, 151, WHITE)
-            self.text_center("Chegue na vitoria-regia no topo para passar de fase. Mosca vale +200.", 8.0, 165, WHITE)
-            self.text_center(f"RECORDE: {self.recorde}", 11, 190, GOLD)
-
-            menu_items = ("JOGAR", "CONTROLES", "SAIR")
-            cores_menu = (ui.VERDE, ui.CIANO, ui.VERMELHO)
-            menu_x = VW // 2 - 132
-            menu_w = 264
-            menu_start_y = 215
-            menu_spacing = 29
-            t_menu = pygame.time.get_ticks() / 1000
-            for i, item in enumerate(menu_items):
-                item_y = menu_start_y + i * menu_spacing
-                selected = i == self.title_menu_idx
-                rect = pygame.Rect(menu_x, item_y - 12, menu_w, 24)
-                ui.fundo_item(self.canvas, rect, cores_menu[i], selected, t_menu, raio=5, passo=3, espessura=1)
-                color = WHITE if selected else ui.misturar(ui.TEXTO3, cores_menu[i], 0.45)
-                self.texto(item, 13, rect.centerx, rect.centery, color, "center")
-
-            # Rodape com comandos em alto contraste. Os icones ficam pequenos
-            # e alinhados com o texto para nao dominarem a legenda.
-            footer_rect = pygame.Rect(18, 311, VW - 36, 45)
-            pygame.draw.rect(self.canvas, (3, 12, 25), footer_rect, border_radius=6)
-            pygame.draw.rect(self.canvas, (26, 105, 132), footer_rect, 1, border_radius=6)
-            hint_font = fonte_retro(13, False)
-            navigation_hint = "NAVEGAR: SETAS / D-PAD / ANALOGICO"
-            draw_controller_text(
-                self.canvas, hint_font, navigation_hint, WHITE,
-                (VW // 2, 322), self.controle, "center", icon_size=13
-            )
-            action_font = fonte_retro(11, False)
-            actions_hint = (
-                f"CONFIRMAR: {self.controle.button_icon(0)} / ENTER   "
-                f"VOLTAR: {self.controle.button_icon(1)} / ESC   "
-                f"CONTROLES: {self.controle.button_icon(3)}"
-            )
-            draw_controller_text(
-                self.canvas, action_font, actions_hint, CYAN,
-                (VW // 2, 342), self.controle, "center", icon_size=13
-            )
-        elif self.state == "intro":
-            self.caixa(cy - 46, 92, ui.CIANO)
-            self.text_center(f"FASE {self.frog.level}", self.FONT + 2, cy - 38, GOLD)
-            self.text_center(self.cfg["nome"], self.BIG, cy - 20, FROG_BELLY)
-            self.text_center(self.cfg["dica"], self.SMALL, cy + 18, WHITE)
-        elif self.state == "clear":
-            self.caixa(cy - 36, 72, ui.VERDE)
-            self.text_center("FASE COMPLETA!", self.BIG, cy - 28, GOLD)
-            self.text_center(f"BONUS +{self.ultimo_bonus}   -   PROXIMA: FASE {self.frog.level + 1}", self.FONT, cy + 10, WHITE)
         elif self.state == "pause":
             self.draw_overlay((6, 20, 24, 150))
-            self.caixa(cy - 36, 72, ui.AMARELO)
-            self.text_center("PAUSADO", self.BIG, cy - 20, GOLD)
-            self.text_center("P PARA CONTINUAR", self.FONT, cy + 12, WHITE)
         elif self.state == "gameover":
             self.draw_overlay((35, 5, 8, 215))
-            self.caixa(cy - 94, 150, ui.VERMELHO)
-            self.text_center("FIM DE JOGO", self.BIG, cy - 80, RED)
-            self.text_center(f"PONTUACAO: {self.frog.score}", self.FONT + 1, cy - 38, WHITE)
-            self.text_center(f"FASE ALCANCADA: {self.frog.level} - {self.cfg['nome']}", self.FONT, cy - 18, WHITE)
-            if self.novo_recorde:
-                self.text_center("NOVO RECORDE!", self.FONT + 2, cy + 6, FROG_BELLY)
-            else:
-                self.text_center(f"RECORDE: {self.recorde}", self.FONT, cy + 6, GOLD)
-            self.text_center("R / ENTER PARA RECOMECAR  -  ESC PARA SAIR", self.SMALL, cy + 40, WHITE)
 
         if self.show_controls:
             # A tela do Frogger usa textos desenhados em uma segunda etapa
@@ -636,6 +643,8 @@ class Game:
         self.window.fill(INK)
         self.window.blit(scaled, (self.ox + dx, self.oy + dy))
         self.desenhar_textos(dx, dy)
+        if not self.show_controls:
+            self._ui_estado()
         pygame.display.flip()
 
     def run(self):
