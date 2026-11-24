@@ -1,5 +1,6 @@
-IMAGENS DE FUNDO
-================
-  background.png        -> fundo da TELA INICIAL (menu)   [JA CONFIGURADO]
-  background_jogos.png  -> fundo da TELA DE JOGOS (opcional)
-Tamanho recomendado: 1280x720 (ou quadrado, que ele ajusta). Sem imagem = preto.
+IMAGENS DA INTERFACE
+====================
+  logo.png   -> logo E-PLACE (PNG com fundo transparente), usado na abertura e nos cabecalhos das telas.
+
+O fundo animado, os botoes, os paineis e os icones sao desenhados pelo codigo
+(src/utils/ui_arcade.py), entao nao dependem de imagens.

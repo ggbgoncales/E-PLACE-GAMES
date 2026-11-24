@@ -46,7 +46,7 @@ O launcher abre o menu e inicia cada jogo em um processo próprio.
 | Tela | Teclas |
 |---|---|
 | Menu inicial | `↑` `↓` navegam · `ENTER` seleciona · `H` abre Recordes · `ESC` sai |
-| Escolher jogo | `↑` `↓` navegam · `ENTER` joga · `H` abre Recordes · `ESC` volta |
+| Escolher jogo | `←` `→` (ou `↑` `↓`) trocam de jogo · `ENTER` joga · `H` abre Recordes · `ESC` volta |
 | Recordes | `R` atualiza · `ESC` ou `BACKSPACE` volta |
 | Configurações | `←` `→` `↑` `↓` movem e alteram · `ENTER` confirma · `ESC` volta |
 
@@ -59,6 +59,18 @@ O launcher e os seis jogos aceitam controles de videogame (Xbox, PlayStation, Ni
 - Cada jogo tem uma tela de controles, aberta pelo botão de cima do controle ou pela tecla `F1`.
 
 O suporte depende de o sistema operacional reconhecer o dispositivo como controle de jogo. Controles genéricos variam bastante entre fabricantes.
+
+## Telas do launcher
+
+![Tela inicial do launcher, com o logo E-Place e os botões Arcade, Opções e Sair](/img/launcher/home.jpg)
+
+Na escolha de jogo, o launcher mostra a capa, o gênero, o número de jogadores, uma descrição curta e o seu recorde, com uma faixa de miniaturas para trocar de jogo.
+
+![Escolha de jogo, com capa, ficha do jogo, recorde e miniaturas](/img/launcher/jogos.jpg)
+
+A tela de Recordes mostra a melhor marca de cada jogo, e as Opções permitem ligar a tela cheia, ajustar o volume e os sons do menu.
+
+![Tela de Recordes, com a melhor marca de cada jogo](/img/launcher/recordes.jpg)
 
 ## Configurações
 

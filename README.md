@@ -41,7 +41,7 @@ python main.py
 | Tela | Teclas |
 |---|---|
 | Menu inicial | `↑` `↓` navegam, `ENTER` seleciona, `H` abre os Recordes, `ESC` sai |
-| Escolher jogo | `↑` `↓` navegam, `ENTER` joga, `H` abre os Recordes, `ESC` volta |
+| Escolher jogo | `←` `→` (ou `↑` `↓`) trocam de jogo, `ENTER` joga, `H` abre os Recordes, `ESC` volta |
 | Recordes | `R` atualiza, `ESC` ou `BACKSPACE` volta |
 | Opções | `←` `→` `↑` `↓` movem e alteram, `ENTER` confirma, `ESC` volta |
 
