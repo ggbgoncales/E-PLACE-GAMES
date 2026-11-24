@@ -33,6 +33,10 @@ class TestLauncher(unittest.TestCase):
         self.assertEqual(self.main.nome_bonito("Ping pong"), "Pong")
         self.assertEqual(self.main.nome_bonito("Flappy bird"), "Flappy Bird")
 
+    def test_ordem_da_lista_segue_a_documentacao(self):
+        titulos = [j["titulo"] for j in self.main.listar_jogos()]
+        self.assertEqual(titulos, ["Snake", "Pong", "Frogger", "Space Invaders", "Flappy Bird", "Kombate"])
+
     def test_titulos_dos_jogos_na_lista(self):
         titulos = sorted(j["titulo"] for j in self.main.listar_jogos())
         self.assertEqual(titulos, ["Flappy Bird", "Frogger", "Kombate", "Pong", "Snake", "Space Invaders"])

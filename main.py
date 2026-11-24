@@ -1,11 +1,9 @@
 """
-E-Place - Launcher de Jogos (minimalista)
-========================================
-Tela inicial: imagem de fundo (assets/ui/background.png) + menu central
-(Jogar / Configuracoes / Sair) com animacao subindo/descendo.
-
-Tela de jogos: fundo preto + lista dos jogos na LATERAL (game1..game5)
-com animacao subindo/descendo, estilo "menu de emulador".
+E-Place - Launcher de Jogos
+===========================
+Abertura com logo e menu (Arcade / Opcoes / Sair), escolha de jogo com capa e ficha,
+tela de recordes e opcoes. O visual (fundo animado, botoes, paineis) fica em
+src/utils/ui_arcade.py.
 
 Rode com:  python main.py
 """
@@ -19,6 +17,7 @@ import json
 import math
 import subprocess
 from src.gamepad import XboxController
+from src.utils import ui_arcade as ui
 
 # Janela sem borda do tamanho do monitor (nao troca a resolucao = nao pisca)
 os.environ.setdefault("SDL_VIDEO_WINDOW_POS", "0,0")
@@ -36,9 +35,24 @@ UI_DIR = os.path.join(BASE_DIR, "assets", "ui")
 CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 
 # fundos opcionais
-BG_HOME = os.path.join(UI_DIR, "background.png")
-BG_JOGOS = os.path.join(UI_DIR, "background_jogos.png")
+LOGO = os.path.join(UI_DIR, "logo.png")
 MUSIC_MENU = os.path.join(BASE_DIR, "assets", "sounds", "eplace_menu.wav")
+
+# Ficha de cada jogo na tela de escolha (chave = título exibido no launcher).
+INFO_JOGOS = {
+    "Snake": {"genero": "ARCADE", "jogadores": "1 JOGADOR", "cor": (84, 255, 139),
+              "descricao": "Coma as frutas, faça combos e escape das paredes. Três dificuldades."},
+    "Pong": {"genero": "ESPORTE", "jogadores": "1 OU 2 JOGADORES", "cor": (24, 231, 255),
+             "descricao": "Rebata a bola e vença a CPU ou um amigo. Quem chegar a 7 pontos vence."},
+    "Frogger": {"genero": "REFLEXO", "jogadores": "1 JOGADOR", "cor": (140, 230, 70),
+                "descricao": "Atravesse o rio em fases infinitas, pulando em troncos e tartarugas."},
+    "Space Invaders": {"genero": "AÇÃO", "jogadores": "1 JOGADOR", "cor": (138, 91, 255),
+                       "descricao": "Pilote a nave, destrua inimigos e asteroides e sobreviva às ondas."},
+    "Flappy Bird": {"genero": "ARCADE", "jogadores": "1 JOGADOR", "cor": (255, 205, 0),
+                    "descricao": "Passe pelos canos, junte moedas e personalize o pássaro na loja."},
+    "Kombate": {"genero": "LUTA", "jogadores": "1 OU 2 JOGADORES", "cor": (255, 70, 80),
+                "descricao": "Luta 1 contra 1 com seis lutadores, quatro arenas e combos."},
+}
 
 LARGURA, ALTURA = 1280, 720
 FPS = 60
@@ -91,11 +105,21 @@ def salvar_config(cfg):
 # ---------------------------------------------------------------------------
 # Jogos
 # ---------------------------------------------------------------------------
+# Ordem de exibição: a mesma da documentação; jogos novos (imports) vêm depois, em ordem alfabética.
+ORDEM_JOGOS = ["Snake", "Ping pong", "Frogger", "Space Invaders", "Flappy bird", "Kombate"]
+
+
+def _chave_de_ordem(nome):
+    if nome in ORDEM_JOGOS:
+        return (0, ORDEM_JOGOS.index(nome), "")
+    return (1, 0, nome.lower())
+
+
 def listar_jogos():
     jogos = []
     if not os.path.isdir(GAMES_DIR):
         return jogos
-    for nome in sorted(os.listdir(GAMES_DIR)):
+    for nome in sorted(os.listdir(GAMES_DIR), key=_chave_de_ordem):
         caminho = os.path.join(GAMES_DIR, nome)
         if not os.path.isdir(caminho) or nome == "imports":
             continue
@@ -165,6 +189,16 @@ class Eplace:
         self.f_menu = fonte_retro(28, True)
         self.f_item = fonte_retro(22, True)
         self.f_pequena = fonte_retro(24, False)
+        # Escala tipográfica das telas: títulos em Press Start 2P, textos em VT323
+        self.f_h1 = fonte_retro(24, True)
+        self.f_h2 = fonte_retro(16, True)
+        self.f_btn = fonte_retro(22, True)
+        self.f_titulo_jogo = fonte_retro(34, True)
+        self.f_corpo = fonte_retro(28, False)
+        self.f_corpo_g = fonte_retro(24, False)
+        self.f_corpo_peq = fonte_retro(23, False)
+        self.f_tecla = fonte_retro(11, True)
+        self.f_valor = fonte_retro(22, True)
 
         self.cena = "home"
         self.origem_recordes = "home"
@@ -176,37 +210,15 @@ class Eplace:
         self.menu_itens = ["Jogar", "Configuracoes", "Sair"]
         self.config_idx = 0
 
-        # HOME: guarda a imagem original da logo pra animar em tempo real
-        self.bg_home_img = None
-        if os.path.exists(BG_HOME):
+        # Visual: fundo arcade animado e logo (PNG com fundo transparente)
+        self.fundo = ui.FundoArcade(LARGURA, ALTURA)
+        self.logo_img = None
+        if os.path.exists(LOGO):
             try:
-                self.bg_home_img = pygame.image.load(BG_HOME).convert()
-            except Exception:
-                self.bg_home_img = None
-
-        if self.bg_home_img:
-            iw, ih = self.bg_home_img.get_size()
-            # escala base 'fit' (logo inteira visivel, sem animacao)
-            self.home_esc_base = min(LARGURA / iw, ALTURA / ih)
-            nw, nh = int(iw * self.home_esc_base), int(ih * self.home_esc_base)
-            self.home_esc = self.home_esc_base
-            self.home_offx = (LARGURA - nw) // 2
-            self.home_offy = (ALTURA - nh) // 2
-        else:
-            self.home_esc_base = 1.0
-            self.home_esc = 1.0
-            self.home_offx = 0
-            self.home_offy = 0
-
-        self.bg_jogos = self._carregar_bg(BG_JOGOS)
-
-        # posicao dos 3 botoes NA ARTE ORIGINAL (coords da imagem 1254x1254)
-        # [x, y, largura, altura] -> ARCADE, OPCOES, SAIR
-        self.botoes_orig = [
-            [324, 737, 623, 114],   # Jogar   (ARCADE)
-            [324, 875, 623, 108],   # Config  (OPCOES)
-            [324, 1007, 623, 108],  # Sair    (SAIR)
-        ]
+                self.logo_img = pygame.image.load(LOGO).convert_alpha()
+            except pygame.error:
+                self.logo_img = None
+        self.recordes_cache = []
 
         # estado da transicao (logo indo pro canto = marca dagua)
         self.trans_ativa = False
@@ -376,6 +388,7 @@ class Eplace:
             escolha = self.menu_itens[self.menu_idx]
             if escolha == "Jogar":
                 self.jogos = listar_jogos()
+                self.recordes_cache = self._carregar_recordes()
                 self.trans_ativa = True
                 self.trans_reversa = False
                 self.trans_t = 0.0
@@ -390,10 +403,10 @@ class Eplace:
     def _ev_jogos(self, e):
         if e.key == pygame.K_h:
             self._abrir_recordes("jogos")
-        elif e.key in (pygame.K_UP, pygame.K_w):
+        elif e.key in (pygame.K_UP, pygame.K_w, pygame.K_LEFT, pygame.K_a):
             if self.jogos:
                 self.jogo_idx = (self.jogo_idx - 1) % len(self.jogos)
-        elif e.key in (pygame.K_DOWN, pygame.K_s):
+        elif e.key in (pygame.K_DOWN, pygame.K_s, pygame.K_RIGHT, pygame.K_d):
             if self.jogos:
                 self.jogo_idx = (self.jogo_idx + 1) % len(self.jogos)
         elif e.key in (pygame.K_RETURN, pygame.K_SPACE):
@@ -513,10 +526,12 @@ class Eplace:
         jogo = self.jogos[self.jogo_idx]
 
         # Tela de "carregando" (o launcher NAO fecha, entao nada pisca)
-        self.tela.fill(PRETO)
-        txt = self.f_menu.render(
-            f"Abrindo {jogo['titulo']}...", True, (235, 235, 235))
-        self.tela.blit(txt, txt.get_rect(center=(LARGURA // 2, ALTURA // 2)))
+        self.fundo.desenhar(self.tela, self.t)
+        capa = self._capa(jogo, 260)
+        ui.brilho(self.tela, capa.get_rect(center=(LARGURA // 2, 300)).inflate(16, 16), self._info_jogo(jogo)["cor"])
+        self.tela.blit(capa, capa.get_rect(center=(LARGURA // 2, 300)))
+        ui.texto(self.tela, self.f_h1, jogo["titulo"].upper(), ui.TEXTO, (LARGURA // 2, 480), "center", sombra=True)
+        ui.texto(self.tela, self.f_corpo, "Abrindo o jogo...", ui.TEXTO2, (LARGURA // 2, 530), "center")
         self._apresentar()
 
         env = os.environ.copy()
@@ -561,12 +576,7 @@ class Eplace:
 
     def _recarregar_imagens(self):
         """Recarrega as imagens depois de reabrir a janela."""
-        if os.path.exists(BG_HOME):
-            try:
-                self.bg_home_img = pygame.image.load(BG_HOME).convert()
-            except Exception:
-                self.bg_home_img = None
-        self.bg_jogos = self._carregar_bg(BG_JOGOS)
+        self.capas_cache = {}
 
     # ------------------------------------------------------------- desenho
     def _bob(self, fase=0.0):
@@ -618,237 +628,262 @@ class Eplace:
         self.tela.blit(img, rect)
         return rect
 
-    def _botao_tela(self, i, esc, ox, oy):
-        """Converte o botao i (coords da arte) para o retangulo na tela."""
-        x, y, w, h = self.botoes_orig[i]
-        return pygame.Rect(int(ox + x * esc), int(oy + y * esc),
-                           int(w * esc), int(h * esc))
+    # ---- Componentes comuns das telas ------------------------------------------------
+    def _cabecalho(self, titulo, direita=None):
+        """Faixa superior: logo, título da tela e (opcional) um texto à direita."""
+        if self.logo_img:
+            lh = 60
+            lw = int(self.logo_img.get_width() * lh / self.logo_img.get_height())
+            self.tela.blit(pygame.transform.smoothscale(self.logo_img, (lw, lh)), (32, 14))
+        ui.texto(self.tela, self.f_h1, titulo, ui.TEXTO, (160, 44), "midleft", sombra=True)
+        if direita:
+            ui.texto(self.tela, self.f_corpo, direita[0], direita[1], (LARGURA - 40, 44), "midright")
+        pygame.draw.line(self.tela, ui.LINHA, (32, 88), (LARGURA - 32, 88), 2)
 
-    def _desenhar_logo(self, esc, ox, oy, alpha=255):
-        """Desenha a arte E-PLACE (sem animacao) na escala/posicao dadas."""
-        if not self.bg_home_img:
-            return
-        iw, ih = self.bg_home_img.get_size()
-        nw, nh = max(1, int(iw * esc)), max(1, int(ih * esc))
-        img = pygame.transform.smoothscale(self.bg_home_img, (nw, nh))
-        if alpha < 255:
-            img = img.copy()
-            img.set_alpha(alpha)
-        self.tela.blit(img, (ox, oy))
-
-    # ---- HOME: logo E-PLACE fixa + seletor fixo sobre os botoes ----
-    def _draw_home(self):
-        self.tela.fill(PRETO)
-        esc, ox, oy = self.home_esc_base, self.home_offx, self.home_offy
-        self._desenhar_logo(esc, ox, oy)
-
-        rect = self._botao_tela(self.menu_idx, esc, ox, oy)
-        sel = rect.inflate(18, 12)
-
-        for k, alfa in ((10, 40), (6, 80), (2, 160)):
-            s = pygame.Surface((sel.w + k * 2, sel.h + k * 2), pygame.SRCALPHA)
-            pygame.draw.rect(s, (255, 255, 255, alfa),
-                             s.get_rect(), width=3, border_radius=14)
-            self.tela.blit(s, (sel.x - k, sel.y - k))
-        pygame.draw.rect(self.tela, DESTAQUE, sel, width=4, border_radius=14)
-
-        self._rodape("SETAS / ANALOGICO mover   |   A selecionar   |   B voltar   |   QUADRADO / X / Y recordes")
-
-    # ---- TRANSICAO: logo desliza pro canto sup. esquerdo (marca dagua) ----
-    def _marca_dagua_alvo(self):
-        """Escala/posicao final da logo como marca dagua no canto sup. esq."""
-        esc = self.home_esc_base * 0.28          # bem menor
-        ox, oy = 20, 20                          # canto superior esquerdo
-        return esc, ox, oy
-
-    def _draw_transicao(self):
-        self.tela.fill(PRETO)
-        p = min(1.0, self.trans_t / self.TRANS_DUR)
-        # easing suave (ease-in-out)
-        p = p * p * (3 - 2 * p)
-
-        # na reversa, o progresso vai de 1 -> 0 (do canto de volta pro centro)
-        if self.trans_reversa:
-            p = 1.0 - p
-            # na volta, tambem mostra a lista de jogos "saindo" ao fundo? nao,
-            # mantemos so a logo pra ficar limpo, igual a ida.
-
-        e0, x0, y0 = self.home_esc_base, self.home_offx, self.home_offy   # centro
-        e1, x1, y1 = self._marca_dagua_alvo()                            # canto
-
-        esc = e0 + (e1 - e0) * p
-        ox = int(x0 + (x1 - x0) * p)
-        oy = int(y0 + (y1 - y0) * p)
-        alpha = int(255 + (110 - 255) * p)       # 255 no centro, 110 no canto
-
-        self._desenhar_logo(esc, ox, oy, alpha)
-
-    # ---- JOGOS (lista na lateral, animada, fundo preto) ----
-    def _draw_jogos(self):
-        self._fundo(self.bg_jogos)
-
-        # logo como marca dagua no canto superior esquerdo
-        e1, x1, y1 = self._marca_dagua_alvo()
-        self._desenhar_logo(e1, x1, y1, alpha=110)
-
-        if not self.jogos:
-            aviso = self.f_menu.render("Nenhum jogo em /games", True, CINZA)
-            self.tela.blit(aviso, aviso.get_rect(
-                center=(LARGURA // 2, ALTURA // 2)))
-            self._rodape("ESC voltar")
-            return
-
-        x_dir = LARGURA - 70
-        centro_y = ALTURA // 2
-        espaco = 74
-
-        # Capa em destaque, centralizada e preservando a proporcao original.
-        jogo_atual = self.jogos[self.jogo_idx]
-        caminho_capa = jogo_atual.get("capa")
-        if caminho_capa:
-            if caminho_capa not in self.capas_cache:
-                try:
-                    original = pygame.image.load(caminho_capa).convert_alpha()
-                    iw, ih = original.get_size()
-                    # Capas quadradas: manter a proporcao e limitar ao mesmo espaco.
-                    escala = min(378 / iw, 378 / ih)
-                    tamanho = (max(1, int(iw * escala)), max(1, int(ih * escala)))
-                    self.capas_cache[caminho_capa] = pygame.transform.smoothscale(original, tamanho)
-                except (pygame.error, OSError):
-                    self.capas_cache[caminho_capa] = None
-
-            capa_img = self.capas_cache[caminho_capa]
-            if capa_img:
-                centro_capa = (570, centro_y)
-                rect = capa_img.get_rect(center=centro_capa)
-
-                # Moldura quadrada, acompanhando o formato 1:1 das capas.
-                margem = 9
-                moldura = rect.inflate(margem * 2, margem * 2)
-                sombra = moldura.move(7, 9)
-                pygame.draw.rect(self.tela, (0, 0, 0), sombra, border_radius=8)
-                pygame.draw.rect(self.tela, (12, 19, 36), moldura, border_radius=8)
-                pygame.draw.rect(self.tela, (35, 225, 190), moldura, width=3, border_radius=8)
-                externa = moldura.inflate(8, 8)
-                pygame.draw.rect(self.tela, (90, 120, 255), externa, width=2, border_radius=10)
-
-                self.tela.blit(capa_img, rect)
-                pygame.draw.rect(self.tela, (235, 245, 255), rect, width=1)
-
-        for i, jogo in enumerate(self.jogos):
-            offset = i - self.jogo_idx
-            sel = (offset == 0)
-            y = centro_y + offset * espaco
-            if y < -40 or y > ALTURA + 40:
-                continue
-
-            if sel:
-                dy = self._bob()
-                cor = DESTAQUE
-                fonte = self.f_menu
-            else:
-                dy = 0
-                fade = max(60, 160 - abs(offset) * 35)
-                cor = (fade, fade, fade)
-                fonte = self.f_item
-
-            txt = fonte.render(jogo["titulo"], True, cor)
-            rect = txt.get_rect(midright=(x_dir, y + dy))
-            self.tela.blit(txt, rect)
-
-            if sel:
-                pygame.draw.rect(self.tela, DESTAQUE,
-                                 (rect.right + 12, rect.centery - 14, 5, 28),
-                                 border_radius=2)
-
-        self._rodape(
-            "DIRECIONAL / ANALOGICO mover   |   A jogar   |   B voltar")
-
-    def _draw_recordes(self):
-        self._fundo(self.bg_jogos)
-        camada = pygame.Surface((LARGURA, ALTURA), pygame.SRCALPHA)
-        camada.fill((3, 5, 18, 220))
-        self.tela.blit(camada, (0, 0))
-
-        titulo = self.f_titulo.render("RECORDES", True, (90, 220, 255))
-        self.tela.blit(titulo, titulo.get_rect(center=(LARGURA // 2, 82)))
-        subtitulo = self.f_pequena.render("RECORDES PESSOAIS DOS JOGOS", True, (170, 190, 220))
-        self.tela.blit(subtitulo, subtitulo.get_rect(center=(LARGURA // 2, 128)))
-
-        medalhas = [(255, 205, 70), (190, 205, 220), (205, 135, 85)]
-        inicio_y = 190
-        for i, (nome, pontos, detalhe) in enumerate(self.recordes):
-            y = inicio_y + i * 72
-            cartao = pygame.Rect(250, y - 27, 780, 56)
-            pygame.draw.rect(self.tela, (13, 25, 48), cartao, border_radius=9)
-            cor_borda = medalhas[i] if i < 3 and pontos is not None and pontos > 0 else (45, 75, 105)
-            pygame.draw.rect(self.tela, cor_borda, cartao, width=2, border_radius=9)
-
-            posicao = self.f_item.render(f"#{i + 1}", True, cor_borda)
-            self.tela.blit(posicao, (cartao.x + 18, cartao.y + 9))
-            nome_img = self.f_item.render(nome, True, BRANCO)
-            self.tela.blit(nome_img, (cartao.x + 95, cartao.y + 9))
-
-            if pontos is None:
-                valor_txt = detalhe.upper()
-                cor_valor = (145, 155, 175)
-            elif pontos == 0:
-                valor_txt = "SEM RECORDE"
-                cor_valor = (145, 155, 175)
-            else:
-                unidade = "PTS" if detalhe == "pontos" else detalhe.upper()
-                valor_txt = f"{pontos:,} {unidade}".replace(",", ".")
-                cor_valor = (90, 235, 180)
-            valor_img = self.f_pequena.render(valor_txt, True, cor_valor)
-            self.tela.blit(valor_img, valor_img.get_rect(midright=(cartao.right - 20, cartao.centery)))
-
-        self._rodape("R atualizar   |   ESC / BACKSPACE voltar")
-
-    def _draw_config(self):
-        self._fundo(None)
-        titulo = self.f_titulo.render("CONFIGURACOES", True, BRANCO)
-        self.tela.blit(titulo, titulo.get_rect(center=(LARGURA // 2, 120)))
-        status_controle = (f"CONTROLE: {self.controle.device_name.upper()} CONECTADO"
-                           if self.controle.connected else "CONTROLE: DESCONECTADO")
-        cor_controle = (70, 230, 160) if self.controle.connected else (150, 150, 150)
-        status_img = self.f_pequena.render(status_controle, True, cor_controle)
-        self.tela.blit(status_img, status_img.get_rect(center=(LARGURA // 2, 185)))
-
-        opcoes = [
-            ("Tela cheia", "LIGADO" if self.cfg["tela_cheia"] else "DESLIGADO"),
-            ("Volume da música", f"{self.cfg['volume']}%"),
-            ("Sons de navegação", "LIGADOS" if self.cfg.get("som_menu", True) else "DESLIGADOS"),
-            ("Voltar", ""),
-        ]
-        cx = LARGURA // 2
-        base_y = 300
-        for i, (label, valor) in enumerate(opcoes):
-            sel = (i == self.config_idx)
-            dy = self._bob(i) if sel else 0
-            cor = DESTAQUE if sel else CINZA
-            texto = label if not valor else f"{label}:  {valor}"
-            fonte = self.f_menu if sel else self.f_item
-            txt = fonte.render(texto, True, cor)
-            self.tela.blit(txt, txt.get_rect(
-                center=(cx, base_y + i * 78 + dy)))
-
-            # Barra visual do volume: acompanha em tempo real as setas esquerda/direita.
-            if i == 1:
-                barra = pygame.Rect(cx - 150, base_y + 1 * 78 + 28, 300, 12)
-                pygame.draw.rect(self.tela, (45, 55, 75), barra, border_radius=6)
-                preenchido = barra.copy()
-                preenchido.width = int(barra.width * self.cfg["volume"] / 100)
-                if preenchido.width > 0:
-                    pygame.draw.rect(self.tela, (0, 220, 255), preenchido, border_radius=6)
-                x_knob = barra.x + int(barra.width * self.cfg["volume"] / 100)
-                pygame.draw.circle(self.tela, (255, 255, 255), (x_knob, barra.centery), 9)
-
-        self._rodape(
-            "SETAS mover / alterar   |   ENTER alternar / selecionar   |   ESC voltar")
+    def _atalhos(self, itens):
+        ui.rodape_atalhos(self.tela, self.f_tecla, self.f_corpo_peq, itens, ALTURA - 50, LARGURA)
 
     def _rodape(self, texto):
-        t = self.f_pequena.render(texto, True, CINZA)
+        t = self.f_corpo_peq.render(texto, True, ui.TEXTO2)
         self.tela.blit(t, (24, ALTURA - 34))
+
+    def _capa(self, jogo, tamanho):
+        """Capa do jogo redimensionada (com cache). Sem capa, desenha uma inicial."""
+        chave = (jogo["id"], tamanho)
+        if chave not in self.capas_cache:
+            img = None
+            if jogo.get("capa"):
+                try:
+                    original = pygame.image.load(jogo["capa"]).convert_alpha()
+                    esc = min(tamanho / original.get_width(), tamanho / original.get_height())
+                    img = pygame.transform.smoothscale(
+                        original, (max(1, int(original.get_width() * esc)), max(1, int(original.get_height() * esc))))
+                except (pygame.error, OSError):
+                    img = None
+            if img is None:
+                img = pygame.Surface((tamanho, tamanho))
+                img.fill(ui.PAINEL2)
+                letra = self.f_h1.render(jogo["titulo"][:1].upper(), True, ui.TEXTO2)
+                img.blit(letra, letra.get_rect(center=(tamanho // 2, tamanho // 2)))
+            self.capas_cache[chave] = img
+        return self.capas_cache[chave]
+
+    def _info_jogo(self, jogo):
+        padrao = {"genero": "JOGO", "jogadores": "1 JOGADOR", "descricao": "Jogo adicionado à coletânea.", "cor": ui.ROSA}
+        info = dict(padrao)
+        info.update(INFO_JOGOS.get(jogo["titulo"], {}))
+        return info
+
+    # ---- HOME ------------------------------------------------------------------------
+    def _rects_home(self):
+        largura, altura, folga = 480, 66, 18
+        x = (LARGURA - largura) // 2
+        y0 = 382
+        return [pygame.Rect(x, y0 + i * (altura + folga), largura, altura) for i in range(3)]
+
+    def _logo_home_rect(self):
+        lw = 520
+        lh = int(self.logo_img.get_height() * lw / self.logo_img.get_width()) if self.logo_img else 0
+        return pygame.Rect((LARGURA - lw) // 2, 28, lw, lh)
+
+    def _draw_home(self):
+        self.fundo.desenhar(self.tela, self.t)
+        if self.logo_img:
+            r = self._logo_home_rect()
+            img = pygame.transform.smoothscale(self.logo_img, r.size)
+            self.tela.blit(img, (r.x, r.y + int(math.sin(self.t * 2.0) * 4)))
+        cores = (ui.CIANO, ui.AMARELO, ui.VERMELHO)
+        rotulos = ("ARCADE", "OPÇÕES", "SAIR")
+        icones = ("jogar", "opcoes", "sair")
+        for i, rect in enumerate(self._rects_home()):
+            ui.botao_menu(self.tela, rect, rotulos[i], cores[i], i == self.menu_idx, self.f_btn, icones[i], self.t)
+        self._atalhos([("SETAS", "Navegar"), ("ENTER", "Selecionar"), ("H", "Recordes"), ("ESC", "Sair")])
+
+    # ---- TRANSICAO home <-> jogos: o logo desliza até o cabeçalho ---------------------
+    def _draw_transicao(self):
+        self.fundo.desenhar(self.tela, self.t)
+        p = min(1.0, self.trans_t / self.TRANS_DUR)
+        p = p * p * (3 - 2 * p)
+        if self.trans_reversa:
+            p = 1.0 - p
+        if self.logo_img:
+            r0 = self._logo_home_rect()
+            lh = 60
+            lw = int(self.logo_img.get_width() * lh / self.logo_img.get_height())
+            r1 = pygame.Rect(32, 14, lw, lh)
+            r = pygame.Rect(int(r0.x + (r1.x - r0.x) * p), int(r0.y + (r1.y - r0.y) * p),
+                            max(1, int(r0.w + (r1.w - r0.w) * p)), max(1, int(r0.h + (r1.h - r0.h) * p)))
+            self.tela.blit(pygame.transform.smoothscale(self.logo_img, r.size), r.topleft)
+        # os botões do menu somem enquanto o logo sobe
+        if p < 0.6:
+            camada = pygame.Surface((LARGURA, ALTURA), pygame.SRCALPHA)
+            cores = (ui.CIANO, ui.AMARELO, ui.VERMELHO)
+            for i, rect in enumerate(self._rects_home()):
+                ui.botao_menu(camada, rect, ("ARCADE", "OPÇÕES", "SAIR")[i], cores[i], False, self.f_btn,
+                              ("jogar", "opcoes", "sair")[i], self.t)
+            camada.set_alpha(int(255 * (1 - p / 0.6)))
+            self.tela.blit(camada, (0, 0))
+
+    # ---- JOGOS: capa grande + ficha do jogo + faixa de miniaturas ---------------------
+    def _draw_jogos(self):
+        self.fundo.desenhar(self.tela, self.t)
+        self._cabecalho("ESCOLHA SEU JOGO",
+                        (f"{self.jogo_idx + 1} / {len(self.jogos)}", ui.TEXTO2) if self.jogos else None)
+        if not self.jogos:
+            ui.texto(self.tela, self.f_h2, "Nenhum jogo em src/games", ui.TEXTO2, (LARGURA // 2, ALTURA // 2), "center")
+            self._atalhos([("ESC", "Voltar")])
+            return
+
+        jogo = self.jogos[self.jogo_idx]
+        info = self._info_jogo(jogo)
+        cor = info["cor"]
+
+        # Capa em destaque, com aura na cor do jogo
+        moldura = pygame.Rect(90, 118, 400, 400)
+        moldura.y += int(math.sin(self.t * 2.2) * 4)
+        ui.brilho(self.tela, moldura, cor, intensidade=80, raio=18)
+        ui.painel(self.tela, moldura, borda=cor, fundo=ui.PAINEL, raio=18, largura_borda=3)
+        capa = self._capa(jogo, 376)
+        self.tela.blit(capa, capa.get_rect(center=moldura.center))
+
+        # Ficha do jogo
+        x0, larg = 560, LARGURA - 560 - 60
+        ui.texto(self.tela, self.f_corpo_peq, f"JOGO {self.jogo_idx + 1:02d}", cor, (x0, 122))
+        ui.texto(self.tela, self.f_titulo_jogo, jogo["titulo"].upper(), ui.TEXTO, (x0, 150), sombra=True)
+        x = x0
+        y_tags = 214
+        for rotulo, c in ((info["genero"], cor), (info["jogadores"], ui.TEXTO2), ("TECLADO E CONTROLE", ui.TEXTO2)):
+            x = ui.etiqueta(self.tela, self.f_corpo_peq, rotulo, c, x, y_tags)
+        y = 268
+        for linha in ui.quebrar_texto(self.f_corpo, info["descricao"], larg)[:3]:
+            ui.texto(self.tela, self.f_corpo, linha, ui.TEXTO2, (x0, y))
+            y += 30
+
+        # Recorde
+        recorde = self._recorde_do_jogo(jogo)
+        cartao = pygame.Rect(x0, 368, larg, 96)
+        ui.painel(self.tela, cartao, borda=ui.LINHA, fundo=ui.PAINEL2)
+        ui.texto(self.tela, self.f_corpo_peq, "SEU RECORDE", ui.TEXTO3, (cartao.x + 24, cartao.y + 12))
+        if recorde and recorde[0] > 0:
+            valor = f"{recorde[0]:,}".replace(",", ".")
+            unidade = "PONTOS" if recorde[1] == "pontos" else recorde[1].upper()
+            r = ui.texto(self.tela, self.f_valor, valor, ui.VERDE, (cartao.x + 24, cartao.y + 56), "midleft")
+            ui.texto(self.tela, self.f_corpo, unidade, ui.TEXTO2, (r.right + 14, r.centery + 4), "midleft")
+        else:
+            ui.texto(self.tela, self.f_corpo, "Ainda sem recorde. Seja o primeiro!", ui.TEXTO2, (cartao.x + 24, cartao.y + 60), "midleft")
+
+        # Botão principal
+        botao = pygame.Rect(x0, 492, 320, 62)
+        ui.botao_menu(self.tela, botao, "JOGAR", cor, True, self.f_btn, "jogar", self.t)
+
+        # Faixa de miniaturas: onde estou e o que vem a seguir
+        n = len(self.jogos)
+        lado, folga = 74, 18
+        total = n * lado + (n - 1) * folga
+        xt = (LARGURA - total) // 2
+        yt = 584
+        for i, outro in enumerate(self.jogos):
+            r = pygame.Rect(xt + i * (lado + folga), yt, lado, lado)
+            sel = (i == self.jogo_idx)
+            c = self._info_jogo(outro)["cor"]
+            if sel:
+                ui.brilho(self.tela, r, c, intensidade=70, raio=10, camadas=3)
+            ui.painel(self.tela, r, borda=c if sel else ui.LINHA, fundo=ui.PAINEL, raio=10, largura_borda=3 if sel else 2)
+            mini = self._capa(outro, lado - 10)
+            if not sel:
+                mini = mini.copy()
+                mini.set_alpha(120)
+            self.tela.blit(mini, mini.get_rect(center=r.center))
+        ui.triangulo(self.tela, (xt - 28, yt + lado // 2), 8, ui.TEXTO3, "esquerda")
+        ui.triangulo(self.tela, (xt + total + 28, yt + lado // 2), 8, ui.TEXTO3, "direita")
+
+        self._atalhos([("SETAS", "Trocar jogo"), ("ENTER", "Jogar"), ("H", "Recordes"), ("ESC", "Voltar")])
+
+    def _recorde_do_jogo(self, jogo):
+        for nome, valor, unidade in self.recordes_cache:
+            if nome == jogo["titulo"]:
+                return (valor or 0, unidade)
+        return None
+
+    # ---- RECORDES -----------------------------------------------------------------
+    def _draw_recordes(self):
+        self.fundo.desenhar(self.tela, self.t)
+        self._cabecalho("RECORDES", ("MELHOR MARCA DE CADA JOGO", ui.TEXTO2))
+        por_titulo = {j["titulo"]: j for j in self.jogos}
+        medalhas = [ui.AMARELO, (200, 212, 230), (214, 140, 90)]
+        maior = max([v for _, v, _ in self.recordes if v] or [1])
+        for i, (nome, pontos, unidade) in enumerate(self.recordes):
+            y = 112 + i * 84
+            cartao = pygame.Rect(180, y, LARGURA - 360, 72)
+            tem = bool(pontos)
+            cor = medalhas[i] if (i < 3 and tem) else ui.LINHA
+            if i == 0 and tem:
+                ui.brilho(self.tela, cartao, cor, intensidade=50, raio=14, camadas=3)
+            ui.painel(self.tela, cartao, borda=cor, fundo=ui.PAINEL2 if tem else ui.PAINEL, raio=14)
+            ui.texto(self.tela, self.f_btn, f"{i + 1}", cor if tem else ui.TEXTO3, (cartao.x + 40, cartao.centery), "center")
+            jogo = por_titulo.get(nome)
+            if jogo:
+                mini = self._capa(jogo, 52)
+                self.tela.blit(mini, mini.get_rect(center=(cartao.x + 108, cartao.centery)))
+            ui.texto(self.tela, self.f_h2, nome.upper(), ui.TEXTO if tem else ui.TEXTO2, (cartao.x + 156, cartao.y + 22), "midleft")
+            if tem:
+                barra = pygame.Rect(cartao.x + 156, cartao.bottom - 22, 260, 8)
+                pygame.draw.rect(self.tela, ui.LINHA, barra, border_radius=4)
+                cheia = barra.copy()
+                cheia.width = max(8, int(barra.width * pontos / maior))
+                pygame.draw.rect(self.tela, ui.VERDE, cheia, border_radius=4)
+                texto_unidade = "PONTOS" if unidade == "pontos" else unidade.upper()
+                valor = f"{pontos:,}".replace(",", ".")
+                r = ui.texto(self.tela, self.f_corpo_g, texto_unidade, ui.TEXTO2, (cartao.right - 24, cartao.centery + 12), "midright")
+                ui.texto(self.tela, self.f_h2, valor, ui.VERDE, (cartao.right - 24, cartao.centery - 12), "midright")
+            else:
+                ui.texto(self.tela, self.f_corpo, "SEM RECORDE", ui.TEXTO3, (cartao.right - 24, cartao.centery), "midright")
+        self._atalhos([("R", "Atualizar"), ("ESC", "Voltar")])
+
+    # ---- OPCOES ---------------------------------------------------------------------
+    def _draw_config(self):
+        self.fundo.desenhar(self.tela, self.t)
+        conectado = self.controle.connected
+        status = (f"● CONTROLE: {self.controle.device_name.upper()}" if conectado else "○ SEM CONTROLE CONECTADO")
+        self._cabecalho("OPÇÕES", (status, ui.VERDE if conectado else ui.TEXTO3))
+        painel = pygame.Rect(240, 128, LARGURA - 480, 420)
+        ui.painel(self.tela, painel, borda=ui.LINHA, fundo=ui.PAINEL, raio=18)
+
+        linhas = [
+            ("TELA CHEIA", "ligado" if self.cfg["tela_cheia"] else "desligado", "chave", self.cfg["tela_cheia"]),
+            ("VOLUME DA MÚSICA", self.cfg["volume"], "barra", None),
+            ("SONS DE NAVEGAÇÃO", "ligado" if self.cfg.get("som_menu", True) else "desligado", "chave", self.cfg.get("som_menu", True)),
+            ("VOLTAR", "", "botao", None),
+        ]
+        altura_linha = 92
+        for i, (rotulo, valor, tipo, ligado) in enumerate(linhas):
+            r = pygame.Rect(painel.x + 20, painel.y + 20 + i * altura_linha, painel.w - 40, altura_linha - 12)
+            sel = (i == self.config_idx)
+            if sel:
+                ui.brilho(self.tela, r, ui.CIANO, intensidade=50, raio=12, camadas=2)
+                ui.painel(self.tela, r, borda=ui.CIANO, fundo=ui.PAINEL2, raio=12, largura_borda=3)
+            ui.texto(self.tela, self.f_h2, rotulo, ui.TEXTO if sel else ui.TEXTO2, (r.x + 28, r.centery), "midleft")
+            if tipo == "chave":
+                pilula = pygame.Rect(0, 0, 124, 40)
+                pilula.midright = (r.right - 28, r.centery)
+                pygame.draw.rect(self.tela, ui.VERDE if ligado else ui.LINHA, pilula, border_radius=20)
+                bolinha_x = pilula.right - 20 if ligado else pilula.x + 20
+                pygame.draw.circle(self.tela, ui.TEXTO, (bolinha_x, pilula.centery), 14)
+                ui.texto(self.tela, self.f_corpo_peq, "LIGADO" if ligado else "DESLIG.", (7, 8, 24) if ligado else ui.TEXTO2,
+                         (pilula.x + 38 if ligado else pilula.right - 36, pilula.centery), "center")
+            elif tipo == "barra":
+                barra = pygame.Rect(0, 0, 260, 12)
+                barra.midright = (r.right - 110, r.centery)
+                pygame.draw.rect(self.tela, ui.LINHA, barra, border_radius=6)
+                cheia = barra.copy()
+                cheia.width = int(barra.width * valor / 100)
+                if cheia.width > 0:
+                    pygame.draw.rect(self.tela, ui.CIANO, cheia, border_radius=6)
+                pygame.draw.circle(self.tela, ui.TEXTO, (barra.x + cheia.width, barra.centery), 12)
+                ui.texto(self.tela, self.f_h2, f"{valor}%", ui.CIANO if sel else ui.TEXTO2, (r.right - 28, r.centery), "midright")
+            if sel and tipo in ("chave", "barra"):
+                ui.triangulo(self.tela, (r.x + 10, r.centery), 7, ui.CIANO, "direita")
+        self._atalhos([("SETAS", "Selecionar"), ("SETAS", "Alterar"), ("ENTER", "Confirmar"), ("ESC", "Voltar")])
 
 
 if __name__ == "__main__":
