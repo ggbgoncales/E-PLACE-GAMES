@@ -422,14 +422,19 @@ def draw_controls_table(surface, rows, title="CONTROLES", footer="F1 / ESC: VOLT
     panel_w = min(w - 36, 900)
     panel_h = min(h - 36, max(270, 150 + len(rows) * 38))
     panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
-    panel.fill((5, 12, 26, 242))
+    panel.fill((14, 17, 40, 242))
     x0, y0 = (w - panel_w) // 2, (h - panel_h) // 2
     surface.blit(panel, (x0, y0))
-    pygame.draw.rect(surface, (75, 205, 235), (x0, y0, panel_w, panel_h), 2, border_radius=14)
+    try:
+        from utils import ui_arcade as _ui
+        _ui.brilho(surface, pygame.Rect(x0, y0, panel_w, panel_h), _ui.CIANO, intensidade=50, raio=14, camadas=3)
+    except ImportError:
+        pass
+    pygame.draw.rect(surface, (24, 231, 255), (x0, y0, panel_w, panel_h), 3, border_radius=14)
     title_font = _fonte_retro(max(18, min(30, w // 34)) * 0.55, True)
     head_font = _fonte_retro(max(13, min(19, w // 52)) * 1.4, False)
     row_font = _fonte_retro(max(12, min(18, w // 55)) * 1.4, False)
-    title_img = title_font.render(title, True, (100, 235, 255))
+    title_img = title_font.render(title, True, (232, 236, 255))
     surface.blit(title_img, title_img.get_rect(center=(w // 2, y0 + 30)))
     inner_left = x0 + 22
     action_w = int(panel_w * .36)
@@ -448,7 +453,7 @@ def draw_controls_table(surface, rows, title="CONTROLES", footer="F1 / ESC: VOLT
         action, ps, xbox, switch = (list(row) + [""] * 4)[:4]
         yy = row_top + i * row_h
         if i % 2 == 0:
-            pygame.draw.rect(surface, (17, 34, 53), (x0 + 12, yy - 2, panel_w - 24, row_h), border_radius=5)
+            pygame.draw.rect(surface, (22, 27, 60), (x0 + 12, yy - 2, panel_w - 24, row_h), border_radius=5)
         vals = (action, ps, xbox, switch)
         centers = [inner_left + action_w / 2,
                    inner_left + action_w + col_w / 2,

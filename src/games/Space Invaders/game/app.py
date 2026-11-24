@@ -23,6 +23,7 @@ from array import array
 
 try:
     import pygame
+    from utils import ui_arcade as ui
     from gamepad import XboxController, draw_controller_text, draw_controls_table
 except ImportError:
     print("Pygame nao encontrado. Instale com: pip install pygame")
@@ -557,9 +558,9 @@ class Game:
         screen.blit(world,offset); self.draw_hud(screen)
         if self.message_time>0: text(screen,self.message,FONT_BIG,CYAN,(WIDTH/2,HEIGHT/2),"center")
         if self.paused:
-            shade=pygame.Surface((WIDTH,HEIGHT),pygame.SRCALPHA); shade.fill((0,0,10,170)); screen.blit(shade,(0,0))
-            text(screen,"PAUSADO",FONT_BIG,WHITE,(WIDTH/2,HEIGHT/2-20),"center")
-            text(screen,"P para continuar",FONT,CYAN,(WIDTH/2,HEIGHT/2+42),"center")
+            r=pygame.Rect(0,0,520,190); r.center=(WIDTH//2,HEIGHT//2)
+            ui.modal(screen,r,"PAUSADO",ui.CIANO,ui.fonte(30,True))
+            ui.rodape_atalhos(screen,ui.fonte(10,True),ui.fonte(22,False),[("P","Continuar"),("ESC","Menu")],r.bottom-62,WIDTH)
 
     def draw_menu(self):
         self.stars.update(.45); self.stars.draw(screen)
@@ -571,24 +572,13 @@ class Game:
         text(screen,"INVADERS",FONT_BIG,CYAN,(66,137))
         text(screen,"COMANDO ESTELAR",FONT_SMALL,(145,190,230),(71,213))
         items=("INICIAR MISSAO","COMO JOGAR","CONTROLES","SAIR")
-        for i,item in enumerate(items):
-            y=300+i*52; selected=i==self.menu_index
-            if selected:
-                pygame.draw.rect(screen,(15,80,125),(58,y-7,286,42),border_radius=8)
-                pygame.draw.rect(screen,CYAN,(58,y-7,5,42),border_radius=3)
-            text(screen,item,FONT,CYAN if selected else (145,165,190),(78,y))
-        # Rodape de navegacao com icones do controle conectado.
-        # Fica abaixo de SAIR, em duas linhas, para nao cobrir as opcoes do menu.
-        navigation_hint = (
-            f"SETAS / D-PAD / ANALOGICO: NAVEGAR  |  "
-            f"{controller.button_icon(0)} / ENTER: CONFIRMAR  |  "
-            f"{controller.button_icon(1)} / ESC: VOLTAR"
-        )
-        draw_controller_text(
-            screen, FONT_TINY, navigation_hint, (105, 180, 210),
-            (WIDTH // 2, 508), controller, "center"
-        )
-        text(screen,"F1: ABRIR CONTROLES",FONT_TINY,(105,180,210),(WIDTH // 2,530),"center")
+        t=pygame.time.get_ticks()/1000
+        ui.lista_menu(screen,items,self.menu_index,ui.CIANO,ui.fonte(15,True),58,240,360,42,8,t,
+                      cores=(ui.CIANO,ui.ROXO,ui.AMARELO,ui.VERMELHO),alinhar="esq",raio=12)
+        ui.rodape_atalhos(screen,ui.fonte(10,True),ui.fonte(22,False),[("SETAS","Navegar"),("ENTER","Confirmar"),("F1","Controles"),("ESC","Sair")],HEIGHT-72,WIDTH)
+        # Atalho do controle conectado (icones do botao)
+        draw_controller_text(screen, FONT_TINY, f"ATALHO CONTROLES: {controller.button_icon(3)}", (105, 180, 210),
+                             (WIDTH // 2, HEIGHT - 20), controller, "center")
 
     def draw_help(self):
         self.stars.draw(screen)
@@ -606,12 +596,15 @@ class Game:
 
     def draw_gameover(self):
         self.stars.draw(screen)
-        text(screen,"MISSAO ENCERRADA",FONT_TITLE,RED,(WIDTH/2,125),"center")
-        text(screen,f"PONTUACAO  {self.score:08d}",FONT_TITLE,WHITE,(WIDTH/2,220),"center")
-        text(screen,f"RECORDE  {self.highscore:08d}",FONT,CYAN,(WIDTH/2,276),"center")
-        text(screen,f"ONDA ALCANCADA  {self.wave}",FONT_SMALL,YELLOW,(WIDTH/2,320),"center")
-        text(screen,"ENTER para reiniciar",FONT,CYAN,(WIDTH/2,395),"center")
-        text(screen,"ESC para o menu",FONT_SMALL,(150,170,195),(WIDTH/2,440),"center")
+        r=pygame.Rect(0,0,600,360); r.center=(WIDTH//2,HEIGHT//2)
+        ui.modal(screen,r,"MISSAO ENCERRADA",ui.VERMELHO,ui.fonte(26,True),escurecer=90)
+        for k,(rot,val,cor) in enumerate((("PONTUACAO",f"{self.score:08d}",ui.TEXTO),("RECORDE",f"{self.highscore:08d}",ui.CIANO))):
+            cr=pygame.Rect(r.x+28+k*282,r.y+84,262,100)
+            ui.painel(screen,cr,borda=ui.LINHA,fundo=ui.PAINEL2,raio=12)
+            ui.texto(screen,ui.fonte(22,False),rot,ui.TEXTO3,(cr.centerx,cr.y+22),"center")
+            ui.texto(screen,ui.fonte(22,True),val,cor,(cr.centerx,cr.y+66),"center")
+        ui.texto(screen,ui.fonte(28,False),f"ONDA ALCANCADA  {self.wave}",ui.AMARELO,(WIDTH//2,r.y+222),"center")
+        ui.rodape_atalhos(screen,ui.fonte(10,True),ui.fonte(22,False),[("ENTER","Jogar de novo"),("ESC","Menu")],r.bottom-62,WIDTH)
 
     def event(self,e):
         if e.type==pygame.KEYDOWN:

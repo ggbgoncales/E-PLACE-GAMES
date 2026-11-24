@@ -5,6 +5,7 @@ import json
 import math
 import random
 import pygame
+from utils import ui_arcade as ui
 from gamepad import XboxController, draw_controller_text, draw_controls_table
 
 RECORDE_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "recorde.json")
@@ -382,14 +383,13 @@ class Game:
         overlay.fill(color)
         self.canvas.blit(overlay, (0, 0))
 
-    def caixa(self, y, h):
+    def caixa(self, y, h, cor=None):
+        """Caixa central das mensagens (fase, pausa, fim de jogo), no mesmo estilo dos menus."""
+        cor = cor or ui.AMARELO
         w = 300
-        x = (VW - w) // 2
-        caixa = pygame.Surface((w, h), pygame.SRCALPHA)
-        caixa.fill((8, 20, 26, 225))
-        self.canvas.blit(caixa, (x, y))
-        pixel_rect(self.canvas, GOLD, (x, y, w, 1))
-        pixel_rect(self.canvas, GOLD, (x, y + h - 1, w, 1))
+        rect = pygame.Rect((VW - w) // 2, y, w, h)
+        ui.brilho(self.canvas, rect, cor, intensidade=60, raio=6, camadas=2, passo=4, espessura=1)
+        ui.painel(self.canvas, rect, borda=cor, fundo=ui.PAINEL, raio=6, largura_borda=1, alfa=235)
 
     # ------------------------------------------------------------------
     # LOOP
@@ -551,25 +551,19 @@ class Game:
             self.text_center(f"RECORDE: {self.recorde}", 11, 190, GOLD)
 
             menu_items = ("JOGAR", "CONTROLES", "SAIR")
+            cores_menu = (ui.VERDE, ui.CIANO, ui.VERMELHO)
             menu_x = VW // 2 - 132
             menu_w = 264
-            menu_start_y = 218
-            menu_spacing = 27
+            menu_start_y = 215
+            menu_spacing = 29
+            t_menu = pygame.time.get_ticks() / 1000
             for i, item in enumerate(menu_items):
                 item_y = menu_start_y + i * menu_spacing
                 selected = i == self.title_menu_idx
-                if selected:
-                    pygame.draw.rect(
-                        self.canvas, (15, 80, 125),
-                        (menu_x, item_y - 11, menu_w, 23), border_radius=4
-                    )
-                    pygame.draw.rect(
-                        self.canvas, CYAN,
-                        (menu_x, item_y - 11, 3, 23), border_radius=2
-                    )
-                color = FROG_BELLY if selected else FROG_LIGHT
-                prefix = "> " if selected else "  "
-                self.texto(prefix + item, 13, menu_x + 16, item_y, color, "midleft")
+                rect = pygame.Rect(menu_x, item_y - 12, menu_w, 24)
+                ui.fundo_item(self.canvas, rect, cores_menu[i], selected, t_menu, raio=5, passo=3, espessura=1)
+                color = WHITE if selected else ui.misturar(ui.TEXTO3, cores_menu[i], 0.45)
+                self.texto(item, 13, rect.centerx, rect.centery, color, "center")
 
             # Rodape com comandos em alto contraste. Os icones ficam pequenos
             # e alinhados com o texto para nao dominarem a legenda.
@@ -593,20 +587,22 @@ class Game:
                 (VW // 2, 342), self.controle, "center", icon_size=13
             )
         elif self.state == "intro":
-            self.caixa(cy - 46, 92)
+            self.caixa(cy - 46, 92, ui.CIANO)
             self.text_center(f"FASE {self.frog.level}", self.FONT + 2, cy - 38, GOLD)
             self.text_center(self.cfg["nome"], self.BIG, cy - 20, FROG_BELLY)
             self.text_center(self.cfg["dica"], self.SMALL, cy + 18, WHITE)
         elif self.state == "clear":
-            self.caixa(cy - 36, 72)
+            self.caixa(cy - 36, 72, ui.VERDE)
             self.text_center("FASE COMPLETA!", self.BIG, cy - 28, GOLD)
             self.text_center(f"BONUS +{self.ultimo_bonus}   -   PROXIMA: FASE {self.frog.level + 1}", self.FONT, cy + 10, WHITE)
         elif self.state == "pause":
             self.draw_overlay((6, 20, 24, 150))
+            self.caixa(cy - 36, 72, ui.AMARELO)
             self.text_center("PAUSADO", self.BIG, cy - 20, GOLD)
             self.text_center("P PARA CONTINUAR", self.FONT, cy + 12, WHITE)
         elif self.state == "gameover":
             self.draw_overlay((35, 5, 8, 215))
+            self.caixa(cy - 94, 150, ui.VERMELHO)
             self.text_center("FIM DE JOGO", self.BIG, cy - 80, RED)
             self.text_center(f"PONTUACAO: {self.frog.score}", self.FONT + 1, cy - 38, WHITE)
             self.text_center(f"FASE ALCANCADA: {self.frog.level} - {self.cfg['nome']}", self.FONT, cy - 18, WHITE)
