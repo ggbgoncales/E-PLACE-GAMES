@@ -282,7 +282,8 @@ def cor_nivel(indice, total):
 
 
 def seletor_dificuldade(tela, rect, rotulo, nome, indice, total, cor, selecionado, t):
-    """Botao de dificuldade igual em todos os jogos: rotulo a esquerda e, a direita, < barras NOME >.
+    """Botao de dificuldade igual em todos os jogos: rotulo a esquerda e, a direita, um seletor em
+    "pilula" com setas, segmentos de nivel (verde -> vermelho) e o nome do nivel.
     `indice` vai de 0 a total-1; o jogo escolhe os seus proprios niveis e nomes."""
     fundo_item(tela, rect, cor, selecionado, t, raio=14)
     cy = rect.centery
@@ -292,20 +293,26 @@ def seletor_dificuldade(tela, rect, rotulo, nome, indice, total, cor, selecionad
 
     f_nome = fonte(11, True)
     larg_nome = f_nome.size(nome)[0]
-    larg_barra, gap = 12, 4
-    larg_barras = total * larg_barra + (total - 1) * gap
-    seta = TEXTO if selecionado else TEXTO3
-    x = rect.right - 24
-    texto(tela, fonte(12, True), ">", seta, (x, cy), "midright")
-    x -= 24
-    texto(tela, f_nome, nome, cor_nome, (x, cy), "midright")
-    x -= larg_nome + 14 - 0
-    x0 = x - larg_barras
+    seg_w, seg_h, gap = 14, 16, 4
+    larg_seg = total * seg_w + (total - 1) * gap
+    pad, seta_w = 14, 8
+    larg = pad + seta_w + 12 + larg_seg + 14 + larg_nome + 12 + seta_w + pad
+    trilho = pygame.Rect(0, 0, larg, 36)
+    trilho.midright = (rect.right - 14, cy)
+    pygame.draw.rect(tela, misturar((6, 8, 18), cor, 0.10), trilho, border_radius=18)
+    pygame.draw.rect(tela, misturar(LINHA, cor_nome, 0.75 if selecionado else 0.35), trilho, width=2, border_radius=18)
+
+    cor_seta = TEXTO if selecionado else TEXTO3
+    triangulo(tela, (trilho.x + pad + 2, cy), 6, cor_seta, "esquerda")
+    triangulo(tela, (trilho.right - pad - 3, cy), 6, cor_seta, "direita")
+
+    x0 = trilho.x + pad + seta_w + 12
     for i in range(total):
-        h = 8 + int(i * 16 / max(1, total - 1))
-        r = pygame.Rect(x0 + i * (larg_barra + gap), cy + 12 - h, larg_barra, h)
+        r = pygame.Rect(x0 + i * (seg_w + gap), cy - seg_h // 2, seg_w, seg_h)
         if i <= indice:
-            pygame.draw.rect(tela, cor_nivel(i, total), r, border_radius=3)
+            c = cor_nivel(i, total)
+            pygame.draw.rect(tela, c, r, border_radius=5)
+            pygame.draw.rect(tela, misturar(c, (255, 255, 255), 0.45), (r.x + 3, r.y + 2, r.w - 6, 3), border_radius=2)
         else:
-            pygame.draw.rect(tela, (48, 40, 62), r, border_radius=3)
-    texto(tela, fonte(12, True), "<", seta, (x0 - 14, cy), "midright")
+            pygame.draw.rect(tela, (38, 42, 66), r, border_radius=5)
+    texto(tela, f_nome, nome, cor_nome, (x0 + larg_seg + 14, cy), "midleft")

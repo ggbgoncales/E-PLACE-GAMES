@@ -236,10 +236,10 @@ class SnakeGame:
 
     def make_menu_buttons(self):
         self.buttons = [
-            Button((WIDTH // 2 - 195, 372, 390, 52), "JOGAR", "play", GREEN),
-            Button((WIDTH // 2 - 195, 434, 390, 52), "DIFICULDADE", "difficulty", CYAN),
-            Button((WIDTH // 2 - 195, 496, 390, 52), "CONTROLES", "controls", CYAN),
-            Button((WIDTH // 2 - 195, 558, 390, 52), "SAIR", "quit", PINK),
+            Button((WIDTH // 2 - 240, 372, 480, 52), "JOGAR", "play", GREEN),
+            Button((WIDTH // 2 - 240, 434, 480, 52), "DIFICULDADE", "difficulty", CYAN),
+            Button((WIDTH // 2 - 240, 496, 480, 52), "CONTROLES", "controls", CYAN),
+            Button((WIDTH // 2 - 240, 558, 480, 52), "SAIR", "quit", PINK),
         ]
 
     def set_state(self, action):
