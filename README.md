@@ -18,7 +18,7 @@ Coletânea de **seis mini-games arcade 2D** em Python e Pygame, reunidos em um l
 ## Requisitos
 
 - Python 3.10 ou superior
-- [Pygame](https://www.pygame.org/) 2.5 ou superior (`requirements.txt`)
+- [Pygame CE](https://pyga.me/) 2.5 ou superior (`requirements.txt`)
 
 ## Como rodar
 

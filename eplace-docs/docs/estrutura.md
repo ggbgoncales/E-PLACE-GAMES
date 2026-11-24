@@ -16,7 +16,7 @@ description: Organização de pastas e funcionamento do launcher do E-Place.
 Eplace Games/
 ├── main.py               # Launcher: menu, lista de jogos, recordes, configurações
 ├── config.json           # Tela cheia, volume, som do menu
-├── requirements.txt      # pygame>=2.5.0
+├── requirements.txt      # pygame-ce>=2.5.0
 ├── README.md
 ├── assets/
 │   ├── covers/           # Capas dos jogos (nome do arquivo = nome da pasta do jogo)
