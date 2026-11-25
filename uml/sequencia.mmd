@@ -1,0 +1,34 @@
+%% Diagrama de sequência: do clique em "Jogar" até a volta ao launcher.
+%% Para editar: abra este arquivo no VS Code com a extensão Mermaid e exporte para PNG.
+sequenceDiagram
+    autonumber
+    actor J as Jogador
+    participant L as Eplace (launcher)
+    participant D as src/games/
+    participant P as Processo do jogo
+    participant R as Arquivo de recorde
+
+    Note over L: O launcher abre e lista os jogos
+    L->>D: os.listdir(GAMES_DIR)
+    D-->>L: pastas que têm main.py
+    L->>R: _carregar_recordes()
+    R-->>L: recorde de cada jogo
+
+    J->>L: escolhe o jogo e confirma (ENTER ou botão do controle)
+    L->>L: iniciar_jogo(): mostra "Abrindo o jogo..." e pausa a música
+    L->>P: subprocess.Popen([python, main.py], cwd=pasta do jogo)
+    activate P
+    loop enquanto o processo estiver aberto
+        L->>P: proc.poll()
+        P-->>L: ainda rodando
+        L->>L: pygame.event.pump() e clock.tick(15)
+    end
+    J->>P: joga a partida
+    P->>R: salva o novo recorde, se for maior
+    J->>P: fecha o jogo (ESC ou menu)
+    P-->>L: processo termina
+    deactivate P
+    L->>L: retoma a música e volta para a tela inicial
+    J->>L: abre "Recordes"
+    L->>R: _carregar_recordes()
+    R-->>L: valores atualizados

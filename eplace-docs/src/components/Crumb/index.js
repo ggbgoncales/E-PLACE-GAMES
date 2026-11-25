@@ -4,6 +4,7 @@ const TITULOS = {
   intro: 'Visão geral',
   instalacao: 'Instalação e execução',
   estrutura: 'Estrutura do projeto',
+  poo: 'Programação orientada a objetos',
   recordes: 'Recordes',
   'jogos/snake': 'Snake',
   'jogos/pong': 'Pong',
