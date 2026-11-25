@@ -100,22 +100,37 @@ Esses arquivos são gerados ao jogar e não vão para o repositório (`.gitignor
 ## Estrutura do projeto
 
 ```text
-.
-├── main.py               # Launcher: menu, lista de jogos, recordes e opções
-├── requirements.txt
+E-PLACE-GAMES/
+├── main.py                 # Launcher: menu, lista de jogos, recordes e opções
+├── requirements.txt        # pygame-ce>=2.5.0
+├── README.md
 ├── assets/
-│   ├── covers/           # Capas dos jogos (nome do arquivo = nome da pasta do jogo)
-│   ├── fonts/            # Press Start 2P e VT323 (licença OFL)
-│   ├── sounds/
-│   └── ui/               # Fundo do menu
+│   ├── covers/             # Capas dos jogos (nome do arquivo = nome da pasta)
+│   ├── fonts/              # Press Start 2P e VT323 (licença OFL)
+│   ├── sounds/             # Música e cliques do menu
+│   └── ui/                 # Logo e fundo do menu
 ├── src/
-│   ├── jogador.py
-│   ├── utils/            # score.py e zip_extractor.py
-│   └── games/            # Um jogo por pasta, cada um com seu main.py
-├── tests/                # Testes automáticos (unittest)
-├── .github/workflows/    # GitHub Actions: testes e build da documentação
-└── eplace-docs/          # Site de documentação (Docusaurus)
+│   ├── gamepad.py          # XboxController: teclado e controle (compartilhado)
+│   ├── jogador.py          # GestorJogador
+│   ├── utils/
+│   │   ├── ui_arcade.py    # Menus, botões e seletor de dificuldade (compartilhado)
+│   │   ├── score.py        # Leitura e gravação de recordes
+│   │   └── zip_extractor.py  # Importa jogos de games/imports/*.zip
+│   └── games/              # Um jogo por pasta, cada um com seu main.py
+│       ├── Snake/          # main.py (arquivo único)
+│       ├── Ping pong/      # main.py + game/ (entities, ui)
+│       ├── Frogger/        # main.py + game/ (entities)
+│       ├── Space Invaders/ # main.py + game/app.py
+│       ├── Flappy bird/    # main.py + game/app.py
+│       ├── Kombate/        # main.py + game/ (lutadores, IA, mapas) + assets/
+│       └── imports/        # Coloque aqui .zip de jogos novos
+├── uml/                    # Diagramas UML (.mmd e .png)
+├── tests/                  # Testes automáticos (unittest)
+├── eplace-docs/            # Site de documentação (Docusaurus)
+└── .github/workflows/      # Testes e build da documentação
 ```
+
+`config.json` e a pasta `data/` são criados ao usar o launcher e não vão para o repositório.
 
 ### Adicionar um jogo novo
 
@@ -133,10 +148,11 @@ Os testes usam só a biblioteca padrão do Python (`unittest`) e rodam sem abrir
 python -m unittest discover -s tests -t .
 ```
 
-Eles cobrem a descoberta de jogos do launcher, a leitura dos recordes, o recorde de vitórias do Pong e do Kombate, as regras de rounds e K.O. do Kombate e o módulo `score.py`. A cada push e pull request, o GitHub Actions roda esses testes (`.github/workflows/tests.yml`).
+Eles cobrem a descoberta de jogos do launcher, a leitura dos recordes, o recorde de vitórias do Pong e do Kombate, as regras de rounds e K.O. do Kombate e o módulo `score.py` e os componentes de menu e dificuldade. A cada push e pull request, o GitHub Actions roda esses testes (`.github/workflows/tests.yml`).
 
 ## Diagramas UML
-Os diagramas de classes ficam em `assets/uml/` (código-fonte `.mmd` em Mermaid e imagem `.png`). Para atualizar, edite o `.mmd` no VS Code com uma extensão Mermaid e exporte de novo. `assets/DiagramaUML.png` é o diagrama do launcher.
+
+Os diagramas ficam em `uml/` (código-fonte `.mmd` em Mermaid e imagem `.png`). Para atualizar, edite o `.mmd` no VS Code com uma extensão Mermaid e exporte de novo. `uml/DiagramaUML.png` é o diagrama do launcher e `uml/DiagramaSequencia.png` mostra o fluxo de abrir um jogo.
 
 ## Documentação
 

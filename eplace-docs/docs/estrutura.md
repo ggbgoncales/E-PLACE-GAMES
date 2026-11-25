@@ -13,34 +13,37 @@ description: Organização de pastas e funcionamento do launcher do E-Place.
 ## Estrutura de pastas
 
 ```text
-Eplace Games/
-├── main.py               # Launcher: menu, lista de jogos, recordes, configurações
-├── config.json           # Tela cheia, volume, som do menu
-├── requirements.txt      # pygame-ce>=2.5.0
+E-PLACE-GAMES/
+├── main.py                 # Launcher: menu, lista de jogos, recordes e opções
+├── requirements.txt        # pygame-ce>=2.5.0
 ├── README.md
 ├── assets/
-│   ├── covers/           # Capas dos jogos (nome do arquivo = nome da pasta do jogo)
-│   ├── ui/               # background.png do menu
-│   └── sounds/           # eplace_menu.wav, menu_click.wav
-├── data/
-│   └── highscore.json    # Pontuações globais
-├── tests/                # Testes automáticos (unittest)
-├── eplace-docs/          # Este site (Docusaurus)
-├── .github/workflows/    # Testes e build da documentação
-└── src/
-    ├── jogador.py        # GestorJogador
-    ├── utils/
-    │   ├── score.py          # Leitura e gravação de recordes
-    │   └── zip_extractor.py  # Importa jogos de games/imports/*.zip
-    └── games/
-        ├── Snake/             # main.py (arquivo único)
-        ├── Ping pong/         # main.py + game/ (entities, ui)
-        ├── Frogger/           # main.py + game/ (entities)
-        ├── Space Invaders/    # main.py + game/app.py
-        ├── Flappy bird/       # main.py + game/app.py
-        ├── Kombate/           # main.py + game/ (lutadores, IA, mapas) + assets/
-        └── imports/           # Coloque aqui .zip de jogos novos
+│   ├── covers/             # Capas dos jogos (nome do arquivo = nome da pasta)
+│   ├── fonts/              # Press Start 2P e VT323 (licença OFL)
+│   ├── sounds/             # Música e cliques do menu
+│   └── ui/                 # Logo e fundo do menu
+├── src/
+│   ├── gamepad.py          # XboxController: teclado e controle (compartilhado)
+│   ├── jogador.py          # GestorJogador
+│   ├── utils/
+│   │   ├── ui_arcade.py    # Menus, botões e seletor de dificuldade (compartilhado)
+│   │   ├── score.py        # Leitura e gravação de recordes
+│   │   └── zip_extractor.py  # Importa jogos de games/imports/*.zip
+│   └── games/              # Um jogo por pasta, cada um com seu main.py
+│       ├── Snake/          # main.py (arquivo único)
+│       ├── Ping pong/      # main.py + game/ (entities, ui)
+│       ├── Frogger/        # main.py + game/ (entities)
+│       ├── Space Invaders/ # main.py + game/app.py
+│       ├── Flappy bird/    # main.py + game/app.py
+│       ├── Kombate/        # main.py + game/ (lutadores, IA, mapas) + assets/
+│       └── imports/        # Coloque aqui .zip de jogos novos
+├── uml/                    # Diagramas UML (.mmd e .png)
+├── tests/                  # Testes automáticos (unittest)
+├── eplace-docs/            # Este site (Docusaurus)
+└── .github/workflows/      # Testes e build da documentação
 ```
+
+`config.json` e a pasta `data/` são criados ao usar o launcher e não vão para o repositório.
 
 ## Como o launcher funciona
 
@@ -90,7 +93,7 @@ pygame.quit()
 
 ## Testes
 
-O projeto tem 27 testes automáticos (`unittest`, sem dependências extras), que rodam sem abrir janela:
+O projeto tem 35 testes automáticos (`unittest`, sem dependências extras), que rodam sem abrir janela:
 
 ```bash
 python -m unittest discover -s tests -t .
@@ -100,7 +103,7 @@ Eles cobrem a descoberta de jogos do launcher, a leitura dos recordes, o recorde
 
 ## Diagramas UML
 
-Os diagramas de classes são escritos em Mermaid (`assets/uml/*.mmd`) e exportados para PNG. Para atualizar, abra o `.mmd` no VS Code com uma extensão Mermaid e exporte de novo.
+Os diagramas são escritos em Mermaid (`uml/*.mmd`) e exportados para PNG. Para atualizar, abra o `.mmd` no VS Code com uma extensão Mermaid e exporte de novo.
 
 **Launcher:** a classe `Eplace` e o que ela usa (configuração, jogos, controle, fundo, pontuações).
 
@@ -119,3 +122,9 @@ Os diagramas de classes são escritos em Mermaid (`assets/uml/*.mmd`) e exportad
 - Cada mini-game tem a lógica em módulos próprios.
 - Constantes (cores, tamanhos, velocidades) ficam em `settings.py` ou no topo do arquivo.
 - Cada jogo documenta como iniciar e quais teclas usa.
+
+**Sequência:** o que acontece do clique em Jogar até a volta ao launcher. O launcher abre cada jogo em um processo próprio e espera ele fechar. Os recordes ficam em arquivos de cada jogo e o launcher os lê de novo ao abrir a tela de Recordes.
+
+![Diagrama de sequência: launcher, processo do jogo e arquivo de recorde](/img/uml/sequencia.png)
+
+Para ver os exemplos de classes, herança e polimorfismo usados no código, veja [Programação orientada a objetos](/poo).

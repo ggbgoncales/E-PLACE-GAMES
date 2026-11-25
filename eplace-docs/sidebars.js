@@ -12,6 +12,7 @@ const sidebars = {
         {type: 'doc', id: 'intro', label: '⌂  Visão geral'},
         {type: 'doc', id: 'instalacao', label: '⚙  Instalação e execução'},
         {type: 'doc', id: 'estrutura', label: '▤  Estrutura do projeto'},
+        {type: 'doc', id: 'poo', label: '◆  Programação orientada a objetos'},
         {type: 'doc', id: 'recordes', label: '🏆  Recordes'},
       ],
     },
