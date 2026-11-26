@@ -190,15 +190,6 @@ npm run serve
 
 No PowerShell do Windows, se aparecer o erro de execução de scripts desabilitada, use o Prompt de Comando (cmd).
 
-### Publicação no GitHub Pages
-
-O workflow `.github/workflows/docs.yml` compila o site a cada alteração em `eplace-docs/`. Para publicar:
-
-1. Um administrador do repositório ativa **Settings → Pages → Source: GitHub Actions**.
-2. Em **Actions → Documentação → Run workflow**, rode o fluxo manualmente.
-
-O endereço fica em `https://ggbgoncales.github.io/E-PLACE-GAMES/`. Se o repositório mudar de dono ou nome, ajuste `url`, `baseUrl`, `organizationName` e `projectName` em `eplace-docs/docusaurus.config.js`.
-
 ## Equipe
 
 - Arley Silvestre
