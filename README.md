@@ -158,15 +158,37 @@ Os diagramas ficam em `uml/` (código-fonte `.mmd` em Mermaid e imagem `.png`). 
 
 O site de documentação, feito com [Docusaurus](https://docusaurus.io/), fica em `eplace-docs/` e traz a instalação, a estrutura do projeto e uma página por jogo, com controles, regras e capturas de tela.
 
-Para ver localmente (precisa de Node.js 20 ou superior):
+### Rodar a documentação no seu computador
+
+Funciona no Mac, no Windows e no Linux.
+
+1. **Instale o Node.js 20 ou mais novo** (versão LTS) em https://nodejs.org. Feche e abra o terminal depois. Para conferir, rode `node -v`.
+2. **Baixe o projeto.** Com o Git: `git clone https://github.com/ggbgoncales/E-PLACE-GAMES.git`. Sem o Git, use **Code → Download ZIP** no GitHub e extraia a pasta.
+3. **Entre na pasta do site e instale as dependências** (só na primeira vez):
 
 ```bash
-cd eplace-docs
+cd E-PLACE-GAMES/eplace-docs
 npm install
+```
+
+No Windows, use `cd E-PLACE-GAMES\eplace-docs`.
+
+4. **Inicie o site:**
+
+```bash
 npm start
 ```
 
-O site abre em `http://localhost:3000/E-PLACE-GAMES/`. Para gerar a versão final: `npm run build`.
+O navegador abre em `http://localhost:3000/E-PLACE-GAMES/` (o `/E-PLACE-GAMES/` no fim é necessário). A página recarrega sozinha quando você edita um arquivo. Para parar, aperte `Ctrl+C`.
+
+Para ver a versão final, igual à publicada, e checar links quebrados:
+
+```bash
+npm run build
+npm run serve
+```
+
+No PowerShell do Windows, se aparecer o erro de execução de scripts desabilitada, use o Prompt de Comando (cmd).
 
 ### Publicação no GitHub Pages
 
